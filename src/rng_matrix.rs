@@ -3,6 +3,7 @@ use crate::matrix_utils::{CumsumOrder, dmatrix_cumsum};
 use nalgebra::DMatrix;
 use rand_distr::{Distribution, StandardNormal};
 
+#[allow(dead_code)]
 pub fn gen_normal_matrix<R: rand::Rng + ?Sized>(
     nrows: usize,
     ncols: usize,
