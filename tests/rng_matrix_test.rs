@@ -1,6 +1,4 @@
 use johansen_null_eigenspectra::rng_matrix::gen_normal_matrix;
-use rand::SeedableRng;
-use rand::rngs::StdRng;
 
 fn assert_vec_option_f64_approx_eq(a: &[f64], b: &[f64], eps: f64) {
     assert_eq!(
@@ -59,8 +57,7 @@ fn test_gen_normal_matrix_cdf() {
     let nrows = 200;
     let ncols = 300;
     let seed: u64 = 42;
-    let mut rng = StdRng::seed_from_u64(seed);
-    let matrix = gen_normal_matrix(nrows, ncols, &mut rng);
+    let matrix = gen_normal_matrix(nrows, ncols, seed);
     let mut vec = matrix.as_slice().to_vec();
     vec.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let expected: Vec<f64> = (1..=99).map(|x| x as f64 / 100.0).collect();
