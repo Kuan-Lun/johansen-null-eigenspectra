@@ -9,8 +9,9 @@ pub fn gen_normal_matrix<R: rand::Rng + ?Sized>(
     ncols: usize,
     rng: &mut R,
 ) -> DMatrix<f64> {
-    let data: Vec<f64> = (0..nrows * ncols)
-        .map(|_| StandardNormal.sample(rng))
+    let data: Vec<f64> = StandardNormal
+        .sample_iter(rng)
+        .take(nrows * ncols)
         .collect();
     DMatrix::from_vec(nrows, ncols, data)
 }
