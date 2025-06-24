@@ -3,9 +3,9 @@ use nalgebra::DMatrix;
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum CumsumOrder {
-    ColumnMajor, // 列主序，依照列的順序累加
-    RowMajor,    // 行主序，依照行的順序累加
-    ColWise,     // 每一欄各自累加
+    ColumnMajor, // 全矩陣，依照 column-major 順序累加
+    RowMajor,    // 全矩陣，依照 row-major 順序累加
+    ColumnWise,  // 每一欄各自累加
     RowWise,     // 每一列各自累加
 }
 
@@ -35,7 +35,7 @@ pub fn dmatrix_cumsum(matrix: &DMatrix<f64>, order: CumsumOrder) -> DMatrix<f64>
             }
             DMatrix::from_row_slice(nrows, ncols, &cumsum_vec)
         }
-        CumsumOrder::ColWise => {
+        CumsumOrder::ColumnWise => {
             let nrows = matrix.nrows();
             let ncols = matrix.ncols();
             let mut cumsum_mat = DMatrix::zeros(nrows, ncols);
