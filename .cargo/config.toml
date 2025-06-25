@@ -1,0 +1,14 @@
+# Linux targets: use system-installed LAPACK
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-llapack"]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-llapack"]
+
+# macOS: use Apple Accelerate framework
+[target.x86_64-apple-darwin]
+rustflags = ["-framework", "Accelerate"]
+
+# Windows MSVC: link to LAPACK .lib in custom path
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-L.", "-lopenblas"]
