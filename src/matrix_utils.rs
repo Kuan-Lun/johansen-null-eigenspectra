@@ -63,3 +63,18 @@ pub fn dmatrix_cumsum(matrix: &DMatrix<f64>, order: CumsumOrder) -> DMatrix<f64>
         }
     }
 }
+
+#[allow(dead_code)]
+pub fn sum_of_outer_products(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
+    let (nrows, ncols) = a.shape();
+    debug_assert_eq!(b.nrows(), nrows);
+    debug_assert_eq!(b.ncols(), ncols);
+
+    let mut sum = DMatrix::<f64>::zeros(nrows, nrows);
+    for i in 0..ncols {
+        let col1 = a.column(i);
+        let col2 = b.column(i);
+        sum += &col1 * &col2.transpose();
+    }
+    sum
+}
