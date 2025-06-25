@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 rand = "0.9.1"
 rand_distr = "0.5.1"
-nalgebra = "0.33.2"
+nalgebra = { git = "https://github.com/dimforge/nalgebra", package = "nalgebra", default-features = false }
 nalgebra-lapack = { git = "https://github.com/dimforge/nalgebra", package = "nalgebra-lapack", default-features = false }
 rand_xoshiro = "0.7.0"
 rayon = "1.10.0"
