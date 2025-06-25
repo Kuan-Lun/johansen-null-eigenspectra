@@ -2,6 +2,7 @@ use crate::matrix_utils::{CumsumOrder, dmatrix_cumsum};
 
 use nalgebra::DMatrix;
 use num_cpus;
+use rand::Rng;
 use rand::SeedableRng;
 use rand_distr::Distribution;
 use rand_distr::StandardNormal;
@@ -20,10 +21,14 @@ pub fn gen_normal_matrix(nrows: usize, ncols: usize, seed: u64) -> DMatrix<f64> 
     let chunk_count = (total / min_chunk).max(n_cpus).min(total);
     let chunk_size = (total + chunk_count - 1) / chunk_count;
 
+    // 建立主 RNG 產生每個 chunk 專用的 seed
+    let mut base_rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+    let derived_seeds: Vec<u64> = (0..chunk_count).map(|_| base_rng.random()).collect();
+
     data.par_chunks_mut(chunk_size)
-        .enumerate()
-        .for_each(|(chunk_idx, chunk)| {
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed + chunk_idx as u64);
+        .zip(derived_seeds.into_par_iter())
+        .for_each(|(chunk, chunk_seed)| {
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(chunk_seed);
             let normal = StandardNormal;
             for val in chunk.iter_mut() {
                 *val = normal.sample(&mut rng);
