@@ -1,43 +1,47 @@
 mod matrix_utils;
 mod rng_matrix;
 
-use matrix_utils::CumsumOrder;
-use rng_matrix::{brownian_motion_matrix, gen_normal_matrix};
+use matrix_utils::{CumsumOrder, sum_of_outer_products};
+use rng_matrix::brownian_motion_matrix;
 
 use nalgebra::DMatrix;
-use rand::SeedableRng;
-use rand::rngs::StdRng;
-use std::time::Instant;
+use nalgebra_lapack::GeneralizedEigen;
 
 fn main() {
-    // let nrows = 2; // 列數
-    // let ncols = 3; // 行數
-    // let seed: u64 = 42; // 你可以改這個 seed
+    let nrows = 2; // 列數
+    let ncols = 300; // 行數
+    let seed: u64 = 42; // 你可以改這個 seed
 
-    // let delta_t = 1.0; // 時間間隔
-    // let start = DMatrix::<f64>::zeros(nrows, 1);
-    // let mut rng = StdRng::seed_from_u64(seed);
-    // let bm = brownian_motion_matrix(
-    //     nrows,
-    //     ncols,
-    //     delta_t,
-    //     CumsumOrder::ColumnWise,
-    //     start,
-    //     &mut rng,
-    // );
-    // println!("布朗運動矩陣:");
-    // println!("{}", &bm);
+    let delta_t = 1.0; // 時間間隔
+    let start = DMatrix::<f64>::zeros(nrows, 1);
+    let bm = brownian_motion_matrix(nrows, ncols, delta_t, CumsumOrder::ColumnWise, start, seed);
 
-    bench_gen_normal_matrix();
-}
+    let dbm = bm.columns(1, ncols - 1).into_owned() - bm.columns(0, ncols - 1).into_owned();
+    let fm = bm.columns(1, ncols - 1).into_owned();
 
-fn bench_gen_normal_matrix() {
-    let nrows = 20000;
-    let ncols = 3000;
-    let seed: u64 = 42;
+    let sum_fm_dbm_outer_products = sum_of_outer_products(&fm, &dbm);
+    let sum_fm_fm_outer_products = sum_of_outer_products(&fm, &fm);
+    // let sub = bm.rows(0, 3);
+    println!("{}", &sum_fm_dbm_outer_products);
+    println!("{}", &sum_fm_fm_outer_products);
 
-    let start = Instant::now();
-    let _matrix = gen_normal_matrix(nrows, ncols, seed);
-    let duration = start.elapsed();
-    println!("gen_normal_matrix elapsed: {:?}", duration);
+    // Ensure both matrices are square and of the same size
+    assert_eq!(
+        sum_fm_dbm_outer_products.nrows(),
+        sum_fm_dbm_outer_products.ncols(),
+        "sum_fm_dbm_outer_products is not square"
+    );
+    assert_eq!(
+        sum_fm_fm_outer_products.nrows(),
+        sum_fm_fm_outer_products.ncols(),
+        "sum_fm_fm_outer_products is not square"
+    );
+    assert_eq!(
+        sum_fm_dbm_outer_products.nrows(),
+        sum_fm_fm_outer_products.nrows(),
+        "Matrices are not the same size"
+    );
+
+    let ge = GeneralizedEigen::new(sum_fm_dbm_outer_products, sum_fm_fm_outer_products);
+    println!("eigenvalues: {:?}", ge.raw_eigenvalues());
 }
