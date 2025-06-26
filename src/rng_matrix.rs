@@ -38,41 +38,47 @@ pub fn gen_normal_matrix(nrows: usize, ncols: usize, seed: u64) -> DMatrix<f64> 
     DMatrix::from_vec(nrows, ncols, data)
 }
 
+// 布朗運動矩陣的時間軸方向
+// 定義時間軸沿著矩陣的哪個方向
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+pub enum TimeAxisDirection {
+    AlongColumns,
+    AlongRows,
+}
+
+impl TimeAxisDirection {
+    pub fn to_cumsum_order(self) -> CumsumOrder {
+        match self {
+            TimeAxisDirection::AlongColumns => CumsumOrder::RowWise,
+            TimeAxisDirection::AlongRows => CumsumOrder::ColumnWise,
+        }
+    }
+}
+
 pub fn brownian_motion_matrix(
-    nrows: usize,
-    ncols: usize,
+    dim: usize,
+    steps: usize,
     delta_t: f64,
-    order: CumsumOrder,
+    time_axis: TimeAxisDirection,
     start: DMatrix<f64>,
     seed: u64,
 ) -> DMatrix<f64> {
-    fn check_start_shape(order: CumsumOrder, start: &DMatrix<f64>, nrows: usize, ncols: usize) {
-        match order {
-            CumsumOrder::ColumnMajor | CumsumOrder::RowMajor => {
-                debug_assert_eq!(
-                    start.nrows(),
-                    1,
-                    "start for ColumnMajor/RowMajor must be 1x1"
-                );
-                debug_assert_eq!(
-                    start.ncols(),
-                    1,
-                    "start for ColumnMajor/RowMajor must be 1x1"
-                );
-            }
-            CumsumOrder::ColumnWise => {
+    fn check_start_shape(dim: usize, time_axis: TimeAxisDirection, start: &DMatrix<f64>) {
+        match time_axis {
+            TimeAxisDirection::AlongColumns => {
                 debug_assert_eq!(start.ncols(), 1, "The number of columns in start must be 1");
                 debug_assert_eq!(
                     start.nrows(),
-                    nrows,
-                    "The number of rows in start must match `nrows`"
+                    dim,
+                    "The number of rows in start must match `dim` (dimensions)"
                 );
             }
-            CumsumOrder::RowWise => {
+            TimeAxisDirection::AlongRows => {
                 debug_assert_eq!(
                     start.ncols(),
-                    ncols,
-                    "The number of columns in start must match `ncols`"
+                    dim,
+                    "The number of columns in start must match `dim` (dimensions)"
                 );
                 debug_assert_eq!(start.nrows(), 1, "The number of rows in start must be 1");
             }
@@ -80,27 +86,26 @@ pub fn brownian_motion_matrix(
     }
 
     fn make_z_matrix(
-        order: CumsumOrder,
-        nrows: usize,
-        ncols: usize,
+        dim: usize,
+        steps: usize,
+        time_axis: TimeAxisDirection,
         start: &DMatrix<f64>,
         seed: u64,
     ) -> DMatrix<f64> {
-        match order {
-            CumsumOrder::ColumnMajor | CumsumOrder::RowMajor => {
-                let mut z = gen_normal_matrix(nrows, ncols, seed);
-                z[(0, 0)] = start[(0, 0)];
-                z
-            }
-            CumsumOrder::ColumnWise => {
+        match time_axis {
+            TimeAxisDirection::AlongColumns => {
+                // 時間軸沿列方向：(dim x (steps+1)) 矩陣
+                // start 是初始狀態向量 (dim x 1)
                 let mut cols: Vec<_> = start.column_iter().collect();
-                let gen_mat = gen_normal_matrix(nrows, ncols - 1, seed);
+                let gen_mat = gen_normal_matrix(dim, steps, seed);
                 cols.extend(gen_mat.column_iter());
                 DMatrix::from_columns(&cols)
             }
-            CumsumOrder::RowWise => {
+            TimeAxisDirection::AlongRows => {
+                // 時間軸沿行方向：((steps+1) x dim) 矩陣
+                // start 是初始狀態向量 (1 x dim)
                 let mut rows: Vec<_> = start.row_iter().collect();
-                let gen_mat = gen_normal_matrix(nrows - 1, ncols, seed);
+                let gen_mat = gen_normal_matrix(steps, dim, seed);
                 rows.extend(gen_mat.row_iter());
                 DMatrix::from_rows(&rows)
             }
@@ -109,11 +114,11 @@ pub fn brownian_motion_matrix(
 
     #[cfg(debug_assertions)]
     {
-        check_start_shape(order, &start, nrows, ncols);
+        check_start_shape(dim, time_axis, &start);
     }
 
-    let z = make_z_matrix(order, nrows, ncols, &start, seed);
+    let z = make_z_matrix(dim, steps, time_axis, &start, seed);
     let sqrt_dt = delta_t.sqrt();
     let scaled = z.map(|v| v * sqrt_dt);
-    dmatrix_cumsum(&scaled, order)
+    dmatrix_cumsum(&scaled, time_axis.to_cumsum_order())
 }
