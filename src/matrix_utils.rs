@@ -66,15 +66,21 @@ pub fn dmatrix_cumsum(matrix: &DMatrix<f64>, order: CumsumOrder) -> DMatrix<f64>
 
 #[allow(dead_code)]
 pub fn sum_of_outer_products(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
+    use rayon::prelude::*;
+
     let (nrows, ncols) = a.shape();
     debug_assert_eq!(b.nrows(), nrows);
     debug_assert_eq!(b.ncols(), ncols);
 
-    let mut sum = DMatrix::<f64>::zeros(nrows, nrows);
-    for i in 0..ncols {
-        let col1 = a.column(i);
-        let col2 = b.column(i);
-        sum += &col1 * &col2.transpose();
-    }
-    sum
+    (0..ncols)
+        .into_par_iter()
+        .map(|i| {
+            let col1 = a.column(i);
+            let col2 = b.column(i);
+            &col1 * &col2.transpose()
+        })
+        .reduce(
+            || DMatrix::<f64>::zeros(nrows, nrows),   // 初始值
+            |acc, outer_product| acc + outer_product, // 累加操作
+        )
 }
