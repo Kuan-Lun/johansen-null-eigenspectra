@@ -68,11 +68,11 @@ pub fn dmatrix_cumsum(matrix: &DMatrix<f64>, order: CumsumOrder) -> DMatrix<f64>
 pub fn sum_of_outer_products(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
     use rayon::prelude::*;
 
-    let (nrows, ncols) = a.shape();
-    debug_assert_eq!(b.nrows(), nrows);
-    debug_assert_eq!(b.ncols(), ncols);
+    let (a_nrows, n_samples) = a.shape();
+    let b_nrows = b.nrows();
+    debug_assert_eq!(b.ncols(), n_samples);
 
-    (0..ncols)
+    (0..n_samples)
         .into_par_iter()
         .map(|i| {
             let col1 = a.column(i);
@@ -80,7 +80,7 @@ pub fn sum_of_outer_products(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64>
             &col1 * &col2.transpose()
         })
         .reduce(
-            || DMatrix::<f64>::zeros(nrows, nrows),   // 初始值
-            |acc, outer_product| acc + outer_product, // 累加操作
+            || DMatrix::<f64>::zeros(a_nrows, b_nrows), // 初始值：a的行數 × b的行數
+            |acc, outer_product| acc + outer_product,   // 累加操作
         )
 }
