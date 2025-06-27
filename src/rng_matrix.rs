@@ -96,18 +96,36 @@ pub fn brownian_motion_matrix(
             TimeAxisDirection::AlongColumns => {
                 // 時間軸沿列方向：(dim x (steps+1)) 矩陣
                 // start 是初始狀態向量 (dim x 1)
-                let mut cols: Vec<_> = start.column_iter().collect();
+
+                // 更高效的方法：直接構建最終的數據向量
+                let total_cols = steps + 1;
+                let mut data = Vec::with_capacity(dim * total_cols);
+
+                // 首先添加 start 列的數據
+                data.extend_from_slice(start.as_slice());
+
+                // 然後添加生成的隨機數據
                 let gen_mat = gen_normal_matrix(dim, steps, seed);
-                cols.extend(gen_mat.column_iter());
-                DMatrix::from_columns(&cols)
+                data.extend_from_slice(gen_mat.as_slice());
+
+                DMatrix::from_vec(dim, total_cols, data)
             }
             TimeAxisDirection::AlongRows => {
                 // 時間軸沿行方向：((steps+1) x dim) 矩陣
                 // start 是初始狀態向量 (1 x dim)
-                let mut rows: Vec<_> = start.row_iter().collect();
+
+                // 更高效的方法：直接構建最終的數據向量
+                let total_rows = steps + 1;
+                let mut data = Vec::with_capacity(total_rows * dim);
+
+                // 首先添加 start 行的數據
+                data.extend_from_slice(start.as_slice());
+
+                // 然後添加生成的隨機數據
                 let gen_mat = gen_normal_matrix(steps, dim, seed);
-                rows.extend(gen_mat.row_iter());
-                DMatrix::from_rows(&rows)
+                data.extend_from_slice(gen_mat.as_slice());
+
+                DMatrix::from_vec(total_rows, dim, data)
             }
         }
     }
