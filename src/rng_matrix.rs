@@ -64,6 +64,7 @@ pub fn brownian_motion_matrix(
     start: DMatrix<f64>,
     seed: u64,
 ) -> DMatrix<f64> {
+    #[cfg(debug_assertions)]
     fn check_start_shape(dim: usize, time_axis: TimeAxisDirection, start: &DMatrix<f64>) {
         match time_axis {
             TimeAxisDirection::AlongColumns => {
