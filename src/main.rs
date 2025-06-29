@@ -1,47 +1,80 @@
+mod data_storage;
+mod johansen_models;
+mod johansen_statistics;
 mod matrix_utils;
 mod rng_matrix;
 
-use matrix_utils::{CumsumOrder, sum_of_outer_products};
-use rng_matrix::brownian_motion_matrix;
-
-use nalgebra::DMatrix;
-use nalgebra_lapack::GeneralizedEigen;
+use data_storage::EigenvalueSimulation;
+use johansen_models::JohansenModel;
+use johansen_statistics::calculate_eigenvalues;
 
 fn main() {
-    let nrows = 2; // 列數
-    let ncols = 300; // 行數
-    let seed: u64 = 42; // 你可以改這個 seed
+    println!("=== Johansen Null Eigenspectra 演示程式 ===");
 
-    let delta_t = 1.0; // 時間間隔
-    let start = DMatrix::<f64>::zeros(nrows, 1);
-    let bm = brownian_motion_matrix(nrows, ncols, delta_t, CumsumOrder::ColumnWise, start, seed);
+    let dim = 2;
+    let steps = 1000;
+    let seed = 42;
+    let model = JohansenModel::NoInterceptNoTrend;
 
-    let dbm = bm.columns(1, ncols - 1).into_owned() - bm.columns(0, ncols - 1).into_owned();
-    let fm = bm.columns(1, ncols - 1).into_owned();
-
-    let sum_fm_dbm_outer_products = sum_of_outer_products(&fm, &dbm);
-    let sum_fm_fm_outer_products = sum_of_outer_products(&fm, &fm);
-    // let sub = bm.rows(0, 3);
-    println!("{}", &sum_fm_dbm_outer_products);
-    println!("{}", &sum_fm_fm_outer_products);
-
-    // Ensure both matrices are square and of the same size
-    assert_eq!(
-        sum_fm_dbm_outer_products.nrows(),
-        sum_fm_dbm_outer_products.ncols(),
-        "sum_fm_dbm_outer_products is not square"
-    );
-    assert_eq!(
-        sum_fm_fm_outer_products.nrows(),
-        sum_fm_fm_outer_products.ncols(),
-        "sum_fm_fm_outer_products is not square"
-    );
-    assert_eq!(
-        sum_fm_dbm_outer_products.nrows(),
-        sum_fm_fm_outer_products.nrows(),
-        "Matrices are not the same size"
+    println!("單次計算演示:");
+    println!(
+        "  維度: {}, 步驟: {}, 種子: {}, 模型: {}",
+        dim, steps, seed, model
     );
 
-    let ge = GeneralizedEigen::new(sum_fm_dbm_outer_products, sum_fm_fm_outer_products);
-    println!("eigenvalues: {:?}", ge.raw_eigenvalues());
+    let eigenvalues = calculate_eigenvalues(dim, steps, seed, model);
+    println!("  特徵值: {:?}", eigenvalues);
+    println!("  特徵值總和: {:.6}", eigenvalues.iter().sum::<f64>());
+
+    println!("\n=== 大規模模擬演示 ===");
+
+    // 使用較小的規模進行演示
+    let simulation = EigenvalueSimulation::new(dim, steps, 100); // 100次運行
+    println!("模擬設定: {} 維度, {} 步驟, {} 次運行", dim, steps, 100);
+
+    // 運行支援斷點續傳的大規模計算
+    println!("開始運行模擬（支援斷點續傳）...");
+    simulation.run_simulation();
+
+    println!("\n=== 結果讀取演示 ===");
+
+    // 讀取特定模型的數據
+    match simulation.read_data(model) {
+        Ok(data) => {
+            println!("成功讀取模型 {} 的數據: {} 筆記錄", model, data.len());
+
+            // 顯示前5筆數據作為範例
+            println!("前5筆數據範例:");
+            for (i, (seed, eigenvalues)) in data.iter().take(5).enumerate() {
+                println!(
+                    "  第{:2}筆: seed={:3}, 特徵值總和={:.6}",
+                    i + 1,
+                    seed,
+                    eigenvalues.iter().sum::<f64>()
+                );
+            }
+
+            // 如果有 seed=42 的數據，特別顯示
+            if let Some((_, eigenvalues)) = data.iter().find(|(s, _)| *s == 42) {
+                println!("  seed=42 的詳細結果: {:?}", eigenvalues);
+            }
+        }
+        Err(e) => println!("讀取失敗: {}", e),
+    }
+
+    // 展示所有模型的狀態
+    println!("\n=== 所有模型狀態 ===");
+    let all_data = simulation.read_all_data();
+    for (model, result) in all_data {
+        match result {
+            Ok(data) => println!("  {} : {} 筆數據", model, data.len()),
+            Err(_) => println!("  {} : 無數據或讀取失敗", model),
+        }
+    }
+
+    println!("\n=== 檔案資訊 ===");
+    println!("檔案命名範例: {}", simulation.get_filename(model));
+
+    println!("\n演示完成！");
+    println!("提示: 如需測試斷點續傳功能，請運行 'cargo test' 執行測試套件");
 }

@@ -1,0 +1,109 @@
+//! 特徵值模擬配置和主要 API
+//!
+//! 提供 `EigenvalueSimulation` 結構體，這是整個模組的主要入口點。
+
+use super::binary_io::read_binary_file;
+use super::parallel_compute::run_model_simulation;
+use crate::johansen_models::JohansenModel;
+
+/// 特徵值模擬配置結構體
+/// 封裝所有模擬參數，提供統一的運算和讀取接口
+#[derive(Debug, Clone)]
+pub struct EigenvalueSimulation {
+    /// 矩陣維度
+    pub dim: usize,
+    /// 時間步驟數
+    pub steps: usize,
+    /// 模擬運行次數
+    pub num_runs: usize,
+}
+
+impl EigenvalueSimulation {
+    /// 創建新的特徵值模擬配置
+    pub fn new(dim: usize, steps: usize, num_runs: usize) -> Self {
+        Self {
+            dim,
+            steps,
+            num_runs,
+        }
+    }
+
+    /// 運行支援斷點續傳的大規模特徵值計算並保存結果
+    /// 這是主要的模擬運算接口，會對所有模型進行計算
+    pub fn run_simulation(&self) {
+        self.run_simulation_internal(false);
+    }
+
+    /// 運行模擬（安靜模式）
+    /// 不輸出進度信息，適合在批量處理或測試環境中使用
+    #[allow(dead_code)] // 此方法在集成測試中使用
+    pub fn run_simulation_quiet(&self) {
+        self.run_simulation_internal(true);
+    }
+
+    /// 內部運行方法
+    fn run_simulation_internal(&self, quiet: bool) {
+        if !quiet {
+            println!("開始大規模特徵值模擬計算 (支援斷點續傳)...");
+            println!(
+                "維度: {}, 步驟數: {}, 運行次數: {}",
+                self.dim, self.steps, self.num_runs
+            );
+        }
+
+        for model in JohansenModel::all_models() {
+            run_model_simulation(
+                self.dim,
+                self.steps,
+                self.num_runs,
+                |m| self.get_filename(m),
+                model,
+                quiet,
+            );
+        }
+    }
+
+    /// 從二進制格式讀取指定模型的特徵值數據（包含seed）
+    /// 注意：返回的數據可能無序，如需有序請自行排序
+    pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
+        let filename = self.get_filename(model);
+        read_binary_file(&filename)
+    }
+
+    /// 讀取所有模型的特徵值數據
+    pub fn read_all_data(&self) -> Vec<(JohansenModel, std::io::Result<Vec<(u64, Vec<f64>)>>)> {
+        JohansenModel::all_models()
+            .into_iter()
+            .map(|model| (model, self.read_data(model)))
+            .collect()
+    }
+
+    /// 獲取指定模型的檔案名稱
+    ///
+    /// 這是唯一的檔案命名入口點。所有內部檔案操作都通過此方法獲取檔案名稱，
+    /// 確保檔案命名邏輯的一致性。如果需要自定義檔案命名規則，
+    /// 可以繼承此 struct 並重寫此方法。
+    ///
+    /// 檔案會自動存放在 data/ 資料夾中，資料夾會在需要時自動創建。
+    /// 使用 PathBuf 確保跨平台路徑分隔符的正確性。
+    pub fn get_filename(&self, model: JohansenModel) -> String {
+        use std::path::PathBuf;
+
+        // 確保 data 資料夾存在
+        let data_dir = PathBuf::from("data");
+        if let Err(e) = std::fs::create_dir_all(&data_dir) {
+            eprintln!("警告: 無法創建資料夾 {}: {}", data_dir.display(), e);
+        }
+
+        // 使用 PathBuf 構建跨平台的檔案路徑
+        let filename = format!(
+            "eigenvalues_model{}_dim{}_steps{}_{}.bin",
+            &model.to_number(),
+            self.dim,
+            self.steps,
+            self.num_runs
+        );
+
+        data_dir.join(filename).to_string_lossy().to_string()
+    }
+}
