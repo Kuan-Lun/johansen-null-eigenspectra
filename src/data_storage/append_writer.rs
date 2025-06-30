@@ -17,6 +17,9 @@ use super::config::PROGRESS_REPORT_INTERVAL;
 /// 檔案格式常數
 const MAGIC_HEADER: &[u8] = b"EIGENVALS_V2"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
+// 方便計算固定區塊尺寸
+const MAGIC_HEADER_LEN: u64 = MAGIC_HEADER.len() as u64;
+const METADATA_SIZE: u64 = EOF_MARKER.len() as u64 + 8 + 4; // EOF + count + eigenvalues_per_run
 
 /// 追加寫入器 - 支援高效的數據追加和斷點續傳
 pub struct AppendOnlyWriter {
@@ -70,13 +73,13 @@ impl AppendOnlyWriter {
             let file_len = file.metadata()?.len();
 
             // 檢查檔案結尾是否真的包含 EOF 標記
-            if file_len >= 12 + 20 {
-                file.seek(SeekFrom::End(-20))?; // EOF_MARK + count + eigenvalues_per_run
+            if file_len >= MAGIC_HEADER_LEN + METADATA_SIZE {
+                file.seek(SeekFrom::End(-(METADATA_SIZE as i64)))?; // EOF_MARK + count + eigenvalues_per_run
                 let mut eof_buf = [0u8; 8];
                 if let Ok(()) = file.read_exact(&mut eof_buf) {
                     if &eof_buf == EOF_MARKER {
                         // 移除結束標記和元數據
-                        let new_len = file_len - 20;
+                        let new_len = file_len - METADATA_SIZE;
                         file.set_len(new_len)?;
                     }
                 }
@@ -189,7 +192,7 @@ pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u64, Ve
 
     // 嘗試從檔案末尾讀取元數據
     let file_len = reader.get_ref().metadata()?.len();
-    if file_len < 12 + 8 + 8 + 4 {
+    if file_len < MAGIC_HEADER_LEN + METADATA_SIZE {
         // magic + eof_marker + count + eigenvalues_per_run
         return Ok(Vec::new()); // 檔案太小，可能是空檔案
     }
