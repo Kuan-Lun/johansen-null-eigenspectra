@@ -4,6 +4,7 @@
 //! and storing eigenvalue data efficiently.
 
 pub mod binary_io; // 設為公開，允許測試
+mod config;
 mod parallel_compute;
 mod resumable_writer;
 mod simulation;

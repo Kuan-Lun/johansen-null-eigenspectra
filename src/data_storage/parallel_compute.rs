@@ -3,6 +3,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use super::binary_io::read_binary_file;
+use super::config::BATCH_SIZE;
 use super::resumable_writer::{check_progress, get_remaining_seeds, spawn_writer_thread};
 use crate::johansen_models::JohansenModel;
 use crate::johansen_statistics::calculate_eigenvalues;
@@ -30,7 +31,7 @@ fn calculate_eigenvalues_parallel(
     statistics_sender: mpsc::Sender<f64>,
     quiet: bool,
 ) {
-    let chunk_size = 1000;
+    let chunk_size = BATCH_SIZE;
     let total_seeds = seeds.len();
     let total_chunks = (total_seeds + chunk_size - 1) / chunk_size;
 

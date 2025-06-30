@@ -4,6 +4,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use super::binary_io::read_binary_file;
+use super::config::{FLUSH_THRESHOLD, PROGRESS_REPORT_INTERVAL};
 use super::stream_writer::EigenvaluesStreamWriter;
 
 /// 檢查檔案的進度，返回 (已完成運行數, 已完成的seed列表)
@@ -73,8 +74,7 @@ impl ResumableStreamWriter {
         self.pending_data.push((seed, eigenvalues.to_vec()));
         self.completed_runs += 1;
 
-        // 每1000次或積累一定數量時保存進度
-        if self.pending_data.len() >= 1000 {
+        if self.pending_data.len() >= FLUSH_THRESHOLD {
             self.flush_pending_data()?;
         }
 
@@ -156,7 +156,7 @@ pub fn spawn_writer_thread(
             binary_writer.write_eigenvalues(seed, &eigenvalues)?;
             count += 1;
 
-            if count % 1000 == 0 && !quiet {
+            if count % PROGRESS_REPORT_INTERVAL == 0 && !quiet {
                 println!(
                     "已寫入 {} 個結果 (總完成: {})",
                     count,
