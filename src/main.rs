@@ -39,7 +39,11 @@ fn main() {
             format_number_with_commas(args.steps),
             format_number_with_commas(args.num_runs)
         );
-        EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation();
+        if args.quiet {
+            EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation_quiet();
+        } else {
+            EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation();
+        }
         let elapsed_time = start_time.elapsed();
         println!("模擬完成！耗時: {}", format_duration(elapsed_time));
     }

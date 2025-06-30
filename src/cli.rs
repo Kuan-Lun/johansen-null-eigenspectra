@@ -12,6 +12,7 @@ pub struct CliArgs {
     pub num_runs: usize,
     pub dim_start: usize,
     pub dim_end: usize,
+    pub quiet: bool, // 新增 quiet 參數
 }
 
 impl Default for CliArgs {
@@ -22,6 +23,7 @@ impl Default for CliArgs {
             num_runs: 1e7 as usize,
             dim_start: 1,
             dim_end: 12,
+            quiet: false, // 預設為 false
         }
     }
 }
@@ -90,6 +92,10 @@ impl CliArgs {
                         return None;
                     }
                     i += 2;
+                }
+                "--quiet" => {
+                    config.quiet = true;
+                    i += 1;
                 }
                 _ => {
                     eprintln!("錯誤: 未知參數 '{}'", args[i]);
