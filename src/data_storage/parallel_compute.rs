@@ -189,8 +189,13 @@ fn run_single_model_simulation(
             let (statistics_sender, statistics_receiver) = mpsc::channel::<f64>();
 
             // 啟動支援斷點續傳的寫入執行緒
-            let writer_handle =
-                spawn_append_writer_thread(filename.clone(), receiver, num_runs, quiet);
+            let writer_handle = spawn_append_writer_thread(
+                filename.clone(),
+                receiver,
+                num_runs,
+                completed_runs,
+                quiet,
+            );
             let statistics_handle = spawn_statistics_collector(statistics_receiver);
 
             // 執行剩餘的並行計算
