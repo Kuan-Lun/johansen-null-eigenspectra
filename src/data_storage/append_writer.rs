@@ -65,15 +65,21 @@ impl AppendOnlyWriter {
             }
 
             // 移除 EOF 標記：打開檔案並截斷到數據結束位置
-            let file = OpenOptions::new().read(true).write(true).open(path_ref)?;
+            let mut file = OpenOptions::new().read(true).write(true).open(path_ref)?;
 
             let file_len = file.metadata()?.len();
 
-            // 如果檔案有 EOF 標記，移除它（末尾的 8+8+4 = 20 字節）
+            // 檢查檔案結尾是否真的包含 EOF 標記
             if file_len >= 12 + 20 {
-                // magic_header + eof_marker + count + eigenvalues_per_run
-                let new_len = file_len - 20; // 移除 EOF_MARKER + count + eigenvalues_per_run
-                file.set_len(new_len)?;
+                file.seek(SeekFrom::End(-20))?; // EOF_MARK + count + eigenvalues_per_run
+                let mut eof_buf = [0u8; 8];
+                if let Ok(()) = file.read_exact(&mut eof_buf) {
+                    if &eof_buf == EOF_MARKER {
+                        // 移除結束標記和元數據
+                        let new_len = file_len - 20;
+                        file.set_len(new_len)?;
+                    }
+                }
             }
 
             // 設置為追加模式
