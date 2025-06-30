@@ -1,12 +1,13 @@
+use super::append_writer::{
+    check_append_progress, get_remaining_seeds, read_append_file, spawn_append_writer_thread,
+};
+use super::config::BATCH_SIZE;
+use crate::display_utils::format_number_with_commas;
+use crate::johansen_models::JohansenModel;
+use crate::johansen_statistics::calculate_eigenvalues;
 use rayon::prelude::*;
 use std::sync::mpsc;
 use std::thread;
-
-use super::binary_io::read_binary_file;
-use super::config::BATCH_SIZE;
-use super::resumable_writer::{check_progress, get_remaining_seeds, spawn_writer_thread};
-use crate::johansen_models::JohansenModel;
-use crate::johansen_statistics::calculate_eigenvalues;
 
 /// 啟動統計收集執行緒
 fn spawn_statistics_collector(
@@ -40,14 +41,27 @@ fn calculate_eigenvalues_parallel(
         let chunk_end = ((chunk_idx + 1) * chunk_size).min(total_seeds);
         let chunk_seeds = &seeds[chunk_start..chunk_end];
 
-        if !quiet {
-            println!(
-                "處理進度: {}/{} ({:.1}%)",
-                chunk_end,
-                total_seeds,
-                (chunk_end as f64 / total_seeds as f64) * 100.0
-            );
-        }
+        // 注意：進度報告已移至 append_writer，避免重複顯示
+        // if !quiet {
+        //     let progress_ratio = chunk_end as f64 / total_seeds as f64;
+        //
+        //     if progress_ratio > 0.0 {
+        //         println!(
+        //             "處理進度: {}/{} ({:.1}%) - {}",
+        //             chunk_end,
+        //             total_seeds,
+        //             progress_ratio * 100.0,
+        //             format_remaining_time(elapsed, chunk_end, total_seeds)
+        //         );
+        //     } else {
+        //         println!(
+        //             "處理進度: {}/{} ({:.1}%)",
+        //             chunk_end,
+        //             total_seeds,
+        //             progress_ratio * 100.0
+        //         );
+        //     }
+        // }
 
         // 並行計算這個chunk的結果
         chunk_seeds.into_par_iter().for_each(|&seed| {
@@ -73,25 +87,28 @@ fn calculate_eigenvalues_parallel(
 
 /// 驗證檔案寫入結果
 fn validate_output_file(filename: &str, expected_count: usize) {
-    match read_binary_file(filename) {
+    match read_append_file(filename) {
         Ok(loaded_data) => {
             if loaded_data.len() == expected_count {
-                println!("SUCCESS: 二進制檔案驗證成功");
+                println!("SUCCESS: 追加檔案驗證成功");
             } else {
                 println!(
-                    "ERROR: 二進制檔案驗證失敗：數據長度不匹配 (期待: {}, 實際: {})",
+                    "ERROR: 追加檔案驗證失敗：數據長度不匹配 (期待: {}, 實際: {})",
                     expected_count,
                     loaded_data.len()
                 );
             }
         }
-        Err(e) => println!("ERROR: 讀取二進制檔案失敗: {}", e),
+        Err(e) => println!("ERROR: 讀取追加檔案失敗: {}", e),
     }
 }
 
 /// 輸出百分位數統計資訊
 fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) {
-    println!("總共計算了 {} 個特徵值總和", sorted_eigenvalues.len());
+    println!(
+        "總共計算了 {} 個特徵值總和",
+        format_number_with_commas(sorted_eigenvalues.len())
+    );
 
     // 輸出各個百分位數
     for &percentile in percentiles {
@@ -129,7 +146,7 @@ fn run_single_model_simulation(
     let filename = get_filename_fn(model);
 
     // 檢查已完成的進度
-    match check_progress(&filename) {
+    match check_append_progress(&filename) {
         Ok((completed_runs, completed_seeds)) => {
             if completed_runs >= num_runs {
                 if !quiet {
@@ -161,7 +178,10 @@ fn run_single_model_simulation(
             }
 
             if !quiet {
-                println!("剩餘 {} 次計算需要完成", remaining_count);
+                println!(
+                    "剩餘 {} 次計算需要完成",
+                    format_number_with_commas(remaining_count)
+                );
             }
 
             // 設置 channels
@@ -169,7 +189,8 @@ fn run_single_model_simulation(
             let (statistics_sender, statistics_receiver) = mpsc::channel::<f64>();
 
             // 啟動支援斷點續傳的寫入執行緒
-            let writer_handle = spawn_writer_thread(filename.clone(), receiver, num_runs, quiet);
+            let writer_handle =
+                spawn_append_writer_thread(filename.clone(), receiver, num_runs, quiet);
             let statistics_handle = spawn_statistics_collector(statistics_receiver);
 
             // 執行剩餘的並行計算
@@ -246,7 +267,12 @@ pub fn run_large_scale_simulation(
 ) {
     if !quiet {
         println!("開始大規模模擬 - 支援斷點續傳");
-        println!("維度: {}, 步數: {}, 運行次數: {}", dim, steps, num_runs);
+        println!(
+            "維度: {}, 步數: {}, 運行次數: {}",
+            dim,
+            format_number_with_commas(steps),
+            format_number_with_commas(num_runs)
+        );
         println!(
             "支援的模型: {}",
             JohansenModel::all_models()

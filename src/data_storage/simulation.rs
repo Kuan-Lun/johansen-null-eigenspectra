@@ -2,8 +2,9 @@
 //!
 //! 提供 `EigenvalueSimulation` 結構體，這是整個模組的主要入口點。
 
-use super::binary_io::read_binary_file;
+use super::append_writer::read_append_file;
 use super::parallel_compute::run_model_simulation;
+use crate::display_utils::format_number_with_commas;
 use crate::johansen_models::JohansenModel;
 
 /// 特徵值模擬配置結構體
@@ -48,7 +49,9 @@ impl EigenvalueSimulation {
             println!("開始大規模特徵值模擬計算 (支援斷點續傳)...");
             println!(
                 "維度: {}, 步驟數: {}, 運行次數: {}",
-                self.dim, self.steps, self.num_runs
+                format_number_with_commas(self.dim),
+                format_number_with_commas(self.steps),
+                format_number_with_commas(self.num_runs)
             );
         }
 
@@ -64,11 +67,11 @@ impl EigenvalueSimulation {
         }
     }
 
-    /// 從二進制格式讀取指定模型的特徵值數據（包含seed）
+    /// 從追加格式讀取指定模型的特徵值數據（包含seed）
     /// 注意：返回的數據可能無序，如需有序請自行排序
     pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
         let filename = self.get_filename(model);
-        read_binary_file(&filename)
+        read_append_file(&filename)
     }
 
     /// 讀取所有模型的特徵值數據
@@ -97,9 +100,9 @@ impl EigenvalueSimulation {
             eprintln!("警告: 無法創建資料夾 {}: {}", data_dir.display(), e);
         }
 
-        // 使用 PathBuf 構建跨平台的檔案路徑
+        // 使用 PathBuf 構建跨平台的檔案路徑，使用新的檔案擴展名
         let filename = format!(
-            "eigenvalues_model{}_dim{}_steps{}_{}.bin",
+            "eigenvalues_model{}_dim{}_steps{}_{}.dat",
             &model.to_number(),
             self.dim,
             self.steps,
