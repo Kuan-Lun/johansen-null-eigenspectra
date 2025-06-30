@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 
-use super::config::PROGRESS_REPORT_INTERVAL;
+use super::config::{FLUSH_INTERVAL, PROGRESS_REPORT_INTERVAL};
 
 /// 格式化剩餘時間顯示
 /// 檔案格式常數
@@ -129,7 +129,7 @@ impl AppendOnlyWriter {
         self.written_count += 1;
 
         // 定期刷新緩衝區
-        if self.written_count % 1 == 0 {
+        if self.written_count % FLUSH_INTERVAL == 0 {
             self.writer.flush()?;
         }
 
