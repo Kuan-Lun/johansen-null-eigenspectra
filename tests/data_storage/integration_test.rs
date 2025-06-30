@@ -1,36 +1,21 @@
-use std::io::{BufWriter, Write};
-
 use johansen_null_eigenspectra::data_storage::EigenvalueSimulation;
+use johansen_null_eigenspectra::data_storage::append_writer::AppendOnlyWriter;
+use johansen_null_eigenspectra::data_storage::parallel_compute::run_model_simulation;
 use johansen_null_eigenspectra::johansen_models::JohansenModel;
 
-/// 重寫二進制檔案的測試輔助函數
-fn rewrite_binary_file(filename: &str, data: &[(u64, Vec<f64>)]) -> std::io::Result<()> {
-    use std::fs::File;
+/// 重寫追加格式檔案的測試輔助函數
+fn rewrite_append_file(filename: &str, data: &[(u64, Vec<f64>)]) -> std::io::Result<()> {
+    // 刪除舊檔案
+    let _ = std::fs::remove_file(filename);
 
-    let file = File::create(filename)?;
-    let mut writer = BufWriter::new(file);
+    // 使用追加寫入器重建檔案
+    let mut writer = AppendOnlyWriter::new(filename, true)?;
 
-    // 寫入總數量
-    writer.write_all(&(data.len() as u64).to_le_bytes())?;
-
-    // 寫入每次運行的特徵值數量（如果有數據的話）
-    if let Some((_, eigenvalues)) = data.first() {
-        writer.write_all(&(eigenvalues.len() as u64).to_le_bytes())?;
-
-        // 寫入所有數據
-        for (seed, eigenvalues) in data {
-            writer.write_all(&seed.to_le_bytes())?;
-            for &val in eigenvalues {
-                writer.write_all(&val.to_le_bytes())?;
-            }
-        }
-    } else {
-        // 沒有數據，寫入0
-        writer.write_all(&0u64.to_le_bytes())?;
+    for (seed, eigenvalues) in data {
+        writer.append_eigenvalues(*seed, eigenvalues)?;
     }
 
-    writer.flush()?;
-    Ok(())
+    writer.finish()
 }
 
 /// 從檔案中移除指定的seed數據（測試用）
@@ -67,7 +52,7 @@ fn remove_seed_from_file(
         std::fs::copy(&filename, &backup_filename)?;
 
         // 重寫檔案
-        rewrite_binary_file(&filename, &filtered_data)?;
+        rewrite_append_file(&filename, &filtered_data)?;
     }
 
     Ok(removed_count)
@@ -86,7 +71,7 @@ fn test_basic_simulation_api() {
     // 測試檔案名稱生成
     assert!(filename.contains("model0"));
     assert!(filename.contains("dim2"));
-    assert!(filename.contains("_5.bin"));
+    assert!(filename.contains("_5.dat"));
 
     // 運行模擬
     simulation.run_simulation_quiet();
@@ -165,8 +150,15 @@ fn test_resumable_functionality() {
     // 清理現有檔案
     let _ = std::fs::remove_file(&filename);
 
-    // 首次運行完整計算
-    simulation.run_simulation_quiet();
+    // 首次運行完整計算 - 只運行指定模型
+    run_model_simulation(
+        simulation.dim,
+        simulation.steps,
+        simulation.num_runs,
+        |m| simulation.get_filename(m),
+        model,
+        true, // quiet
+    );
 
     let mut data = simulation.read_data(model).unwrap();
     data.sort_by_key(|(seed, _)| *seed);
@@ -193,8 +185,15 @@ fn test_resumable_functionality() {
         assert!(!seeds_to_remove.contains(seed));
     }
 
-    // 運行斷點續傳
-    simulation.run_simulation_quiet();
+    // 運行斷點續傳 - 只運行指定模型
+    run_model_simulation(
+        simulation.dim,
+        simulation.steps,
+        simulation.num_runs,
+        |m| simulation.get_filename(m),
+        model,
+        true, // quiet
+    );
 
     // 檢查最終結果
     let mut final_data = simulation.read_data(model).unwrap();
@@ -293,7 +292,7 @@ fn test_filename_consistency() {
         assert!(filename.contains(&format!("model{}", i)));
         assert!(filename.contains("dim3"));
         assert!(filename.contains("steps500"));
-        assert!(filename.contains("_1000.bin"));
+        assert!(filename.contains("_1000.dat"));
     }
 }
 
