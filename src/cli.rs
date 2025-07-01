@@ -263,6 +263,7 @@ impl CliArgs {
         println!(
             "  --model <list>       指定要計算的模型代號，使用逗號分隔，如 0,2,4 (預設: 0,1,2,3,4)"
         );
+        println!("  --quiet              抑制進度輸出信息");
         println!("  -h, --help           顯示此幫助信息");
         println!();
         println!("範例:");
