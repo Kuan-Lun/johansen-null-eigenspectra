@@ -10,7 +10,7 @@ use std::time::Duration;
 /// * `duration` - 要格式化的持續時間
 ///
 /// # 返回值
-/// 格式化後的時間字串，例如 "2 天 3 小時 45 分鐘 30.25 秒"
+/// 格式化後的時間字串，例如 "2 days 3 hours 45 minutes 30.25 seconds"
 ///
 /// # 範例
 /// ```
@@ -19,7 +19,7 @@ use std::time::Duration;
 ///
 /// let duration = Duration::from_secs(3725); // 1 小時 2 分鐘 5 秒
 /// let formatted = format_duration(duration);
-/// assert_eq!(formatted, "1 小時 2 分鐘 5.00 秒");
+/// assert_eq!(formatted, "1 hour 2 minutes 5.00 seconds");
 /// ```
 pub fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.as_secs_f64();
@@ -30,15 +30,40 @@ pub fn format_duration(duration: Duration) -> String {
 
     if days > 0 {
         format!(
-            "{} 天 {} 小時 {} 分鐘 {:.2} 秒",
-            days, hours, minutes, seconds
+            "{} day{} {} hour{} {} minute{} {:.2} second{}",
+            days,
+            if days == 1 { "" } else { "s" },
+            hours,
+            if hours == 1 { "" } else { "s" },
+            minutes,
+            if minutes == 1 { "" } else { "s" },
+            seconds,
+            if seconds == 1.0 { "" } else { "s" }
         )
     } else if hours > 0 {
-        format!("{} 小時 {} 分鐘 {:.2} 秒", hours, minutes, seconds)
+        format!(
+            "{} hour{} {} minute{} {:.2} second{}",
+            hours,
+            if hours == 1 { "" } else { "s" },
+            minutes,
+            if minutes == 1 { "" } else { "s" },
+            seconds,
+            if seconds == 1.0 { "" } else { "s" }
+        )
     } else if minutes > 0 {
-        format!("{} 分鐘 {:.2} 秒", minutes, seconds)
+        format!(
+            "{} minute{} {:.2} second{}",
+            minutes,
+            if minutes == 1 { "" } else { "s" },
+            seconds,
+            if seconds == 1.0 { "" } else { "s" }
+        )
     } else {
-        format!("{:.2} 秒", seconds)
+        format!(
+            "{:.2} second{}",
+            seconds,
+            if seconds == 1.0 { "" } else { "s" }
+        )
     }
 }
 
@@ -81,7 +106,7 @@ pub fn format_number_with_commas(n: usize) -> String {
 /// * `total` - 總工作量
 ///
 /// # 返回值
-/// 剩餘時間的格式化字串，如果無法估算則返回 "未知"
+/// 剩餘時間的格式化字串，如果無法估算則返回 "unknown"
 ///
 /// # 範例
 /// ```
@@ -94,7 +119,7 @@ pub fn format_number_with_commas(n: usize) -> String {
 /// ```
 pub fn format_remaining_time(elapsed: Duration, completed: usize, total: usize) -> String {
     if completed == 0 || completed >= total {
-        return "未知".to_string();
+        return "unknown".to_string();
     }
 
     let elapsed_seconds = elapsed.as_secs_f64();
@@ -103,11 +128,14 @@ pub fn format_remaining_time(elapsed: Duration, completed: usize, total: usize) 
     let remaining_seconds = estimated_total_seconds - elapsed_seconds;
 
     if remaining_seconds <= 0.0 {
-        return "即將完成".to_string();
+        return "completing soon".to_string();
     }
 
     let remaining_duration = Duration::from_secs_f64(remaining_seconds);
-    format!("預計剩餘: {}", format_duration(remaining_duration))
+    format!(
+        "estimated remaining: {}",
+        format_duration(remaining_duration)
+    )
 }
 
 /// 格式化百分比
@@ -182,15 +210,18 @@ mod tests {
 
     #[test]
     fn test_format_duration() {
-        assert_eq!(format_duration(Duration::from_secs(30)), "30.00 秒");
-        assert_eq!(format_duration(Duration::from_secs(90)), "1 分鐘 30.00 秒");
+        assert_eq!(format_duration(Duration::from_secs(30)), "30.00 seconds");
+        assert_eq!(
+            format_duration(Duration::from_secs(90)),
+            "1 minute 30.00 seconds"
+        );
         assert_eq!(
             format_duration(Duration::from_secs(3661)),
-            "1 小時 1 分鐘 1.00 秒"
+            "1 hour 1 minute 1.00 second"
         );
         assert_eq!(
             format_duration(Duration::from_secs(90061)),
-            "1 天 1 小時 1 分鐘 1.00 秒"
+            "1 day 1 hour 1 minute 1.00 second"
         );
     }
 
@@ -207,16 +238,16 @@ mod tests {
         // 測試正常情況
         let elapsed = Duration::from_secs(60);
         let remaining = format_remaining_time(elapsed, 100, 1000);
-        assert!(remaining.contains("預計剩餘"));
+        assert!(remaining.contains("estimated remaining"));
 
         // 測試邊界情況
         assert_eq!(
             format_remaining_time(Duration::from_secs(60), 0, 1000),
-            "未知"
+            "unknown"
         );
         assert_eq!(
             format_remaining_time(Duration::from_secs(60), 1000, 1000),
-            "未知"
+            "unknown"
         );
     }
 
