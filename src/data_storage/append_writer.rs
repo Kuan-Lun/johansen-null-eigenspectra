@@ -84,8 +84,13 @@ impl AppendOnlyWriter {
                 .write(true)
                 .open(path_ref)?;
 
-            if let Some(size) = expected_size {
-                file.set_len(size)?;
+            // 如果指定了預期大小，預先分配檔案空間（暫時禁用以避免影響斷點續傳）
+            if let Some(_size) = expected_size {
+                if !quiet {
+                    println!(
+                        "File pre-allocation disabled to ensure resume functionality works correctly"
+                    );
+                }
             }
 
             let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
@@ -350,6 +355,17 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
             break; // 遇到結束標記
         }
 
+        // 檢查是否是全零（預分配的空白區域）
+        if seed_buf == [0u8; 8] {
+            // 檢查後續是否也是零，如果是則認為到達了預分配的空白區域
+            if reader.read_exact(&mut count_buf).is_ok() && count_buf == [0u8; 4] {
+                break; // 遇到預分配的空白區域
+            } else {
+                // 如果不是全零的 count，則繼續處理（seed 為 0 是有效的）
+                reader.seek(SeekFrom::Current(-4))?; // 回退 count_buf
+            }
+        }
+
         // 讀取特徵值數量
         if reader.read_exact(&mut count_buf).is_err() {
             break; // 不完整的數據塊
@@ -357,6 +373,11 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
 
         let seed = u64::from_le_bytes(seed_buf);
         let eigenvalue_count = u32::from_le_bytes(count_buf) as usize;
+
+        // 檢查特徵值數量是否合理（避免讀取損壞的數據）
+        if eigenvalue_count == 0 || eigenvalue_count > 1000 {
+            break; // 不合理的特徵值數量，可能是預分配的空白區域
+        }
 
         // 讀取特徵值
         let mut eigenvalues = Vec::with_capacity(eigenvalue_count);
