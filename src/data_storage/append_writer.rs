@@ -58,7 +58,7 @@ impl AppendOnlyWriter {
                 }
                 if !quiet {
                     println!(
-                        "檢測到既有檔案，已有 {} 筆數據",
+                        "Detected existing file with {} data records",
                         format_number_with_commas(written_count)
                     );
                 }
@@ -109,7 +109,7 @@ impl AppendOnlyWriter {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "特徵值數量不一致: 期待 {}, 實際 {}",
+                        "Eigenvalue count mismatch: expected {}, actual {}",
                         format_number_with_commas(expected_len),
                         format_number_with_commas(eigenvalues.len())
                     ),
@@ -157,7 +157,7 @@ impl AppendOnlyWriter {
 
         if !self.quiet {
             println!(
-                "SUCCESS: 追加寫入完成，共寫入 {} 筆數據",
+                "SUCCESS: append write completed, wrote {} data records",
                 format_number_with_commas(self.written_count)
             );
         }
@@ -183,7 +183,7 @@ pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u64, Ve
     if &magic_buf != MAGIC_HEADER {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            "檔案格式錯誤：魔術標頭不匹配",
+            "File format error: magic header mismatch",
         ));
     }
 
@@ -260,7 +260,7 @@ fn read_with_metadata(
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
-                    "特徵值數量不一致: 期待 {}, 實際 {}",
+                    "Eigenvalue count mismatch: expected {}, actual {}",
                     format_number_with_commas(eigenvalues_per_run),
                     format_number_with_commas(eigenvalue_count)
                 ),
@@ -380,7 +380,7 @@ pub fn spawn_append_writer_thread(
 
                 if progress_ratio > 0.0 {
                     println!(
-                        "模擬進度: {}/{} ({:.2}%) - {}",
+                        "Simulation progress: {}/{} ({:.2}%) - {}",
                         format_number_with_commas(current_total),
                         format_number_with_commas(total_runs),
                         progress_ratio * 100.0,
@@ -388,7 +388,7 @@ pub fn spawn_append_writer_thread(
                     );
                 } else {
                     println!(
-                        "模擬進度: {}/{} ({:.2}%)",
+                        "Simulation progress: {}/{} ({:.2}%)",
                         format_number_with_commas(current_total),
                         format_number_with_commas(total_runs),
                         progress_ratio * 100.0
