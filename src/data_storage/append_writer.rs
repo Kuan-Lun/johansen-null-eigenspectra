@@ -11,12 +11,35 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 
-use super::config::{FLUSH_INTERVAL, PROGRESS_REPORT_INTERVAL, WRITE_BUFFER_CAPACITY};
+use super::config::{
+    FLUSH_INTERVAL, MAX_READ_BUFFER_SIZE, MIN_READ_BUFFER_SIZE, PROGRESS_REPORT_INTERVAL,
+    WRITE_BUFFER_CAPACITY,
+};
 
-/// 格式化剩餘時間顯示
 /// 檔案格式常數
 const MAGIC_HEADER: &[u8] = b"EIGENVALS_V2"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
+
+/// 根據檔案大小計算最佳讀取緩衝區大小
+fn calculate_read_buffer_size(file_size: u64) -> usize {
+    // 根據檔案大小調整緩衝區：
+    // - 小檔案 (< 1MB): 64KB
+    // - 中檔案 (1MB - 100MB): 檔案大小的 1/8，最多 4MB
+    // - 大檔案 (> 100MB): 16MB
+
+    const ONE_MB: u64 = 1024 * 1024;
+    const HUNDRED_MB: u64 = 100 * ONE_MB;
+
+    if file_size < ONE_MB {
+        MIN_READ_BUFFER_SIZE
+    } else if file_size < HUNDRED_MB {
+        // 使用檔案大小的 1/8 作為緩衝區，但不超過 4MB
+        let buffer_size = (file_size / 8) as usize;
+        buffer_size.min(4 * 1024 * 1024).max(MIN_READ_BUFFER_SIZE)
+    } else {
+        MAX_READ_BUFFER_SIZE
+    }
+}
 
 /// 追加寫入器 - 支援高效的數據追加和斷點續傳
 pub struct AppendOnlyWriter {
@@ -51,6 +74,7 @@ impl AppendOnlyWriter {
             })
         } else {
             // 既有檔案：檢查數據並移除 EOF 標記
+            // 先讀取檔案內容來獲取計數 (保持原始容錯邏輯)
             if let Ok(existing_data) = read_append_file(&path) {
                 written_count = existing_data.len();
                 if let Some((_, eigenvalues)) = existing_data.first() {
@@ -64,20 +88,21 @@ impl AppendOnlyWriter {
                 }
             }
 
-            // 移除 EOF 標記：打開檔案並截斷到數據結束位置
+            // 然後移除 EOF 標記：打開檔案並截斷到數據結束位置
             let mut file = OpenOptions::new().read(true).write(true).open(path_ref)?;
-
             let file_len = file.metadata()?.len();
 
             // 檢查檔案結尾是否真的包含 EOF 標記
             if file_len >= 12 + 20 {
-                file.seek(SeekFrom::End(-20))?; // EOF_MARK + count + eigenvalues_per_run
+                file.seek(SeekFrom::End(-20))?;
                 let mut eof_buf = [0u8; 8];
                 if let Ok(()) = file.read_exact(&mut eof_buf) {
                     if &eof_buf == EOF_MARKER {
-                        // 移除結束標記和元數據
                         let new_len = file_len - 20;
                         file.set_len(new_len)?;
+                        if !quiet {
+                            println!("Removed EOF marker to enable append mode");
+                        }
                     }
                 }
             }
@@ -168,8 +193,12 @@ impl AppendOnlyWriter {
 
 /// 讀取追加格式的檔案
 pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
-    let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let file = File::open(&path)?;
+    let file_size = file.metadata()?.len();
+
+    // 根據檔案大小計算最佳緩衝區大小
+    let buffer_size = calculate_read_buffer_size(file_size);
+    let mut reader = BufReader::with_capacity(buffer_size, file);
 
     // 檢查魔術標頭
     let mut magic_buf = [0u8; 12];
