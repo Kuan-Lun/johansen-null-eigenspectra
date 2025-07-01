@@ -101,7 +101,7 @@ impl CliArgs {
                         match Self::parse_models(&value) {
                             Ok(models) => config.models = Some(models),
                             Err(e) => {
-                                eprintln!("錯誤: {}", e);
+                                eprintln!("Error: {}", e);
                                 return None;
                             }
                         }
@@ -115,8 +115,8 @@ impl CliArgs {
                     i += 1;
                 }
                 _ => {
-                    eprintln!("錯誤: 未知參數 '{}'", args[i]);
-                    eprintln!("使用 --help 查看可用選項");
+                    eprintln!("Error: unknown argument '{}'", args[i]);
+                    eprintln!("Use --help to see available options");
                     return None;
                 }
             }
@@ -133,7 +133,7 @@ impl CliArgs {
     /// 解析下一個參數值（支援逗號分隔的數字）
     fn parse_next_arg(args: &[String], index: usize, param_name: &str) -> Option<Option<usize>> {
         if index + 1 >= args.len() {
-            eprintln!("錯誤: {} 參數缺少數值", param_name);
+            eprintln!("Error: {} parameter requires a value", param_name);
             return None;
         }
 
@@ -145,7 +145,7 @@ impl CliArgs {
             Ok(value) => Some(Some(value)),
             Err(_) => {
                 eprintln!(
-                    "錯誤: {} 參數必須是正整數（可使用逗號分隔，如：1,000,000）",
+                    "Error: {} parameter must be a positive integer (commas allowed, e.g., 1,000,000)",
                     param_name
                 );
                 None
@@ -159,7 +159,7 @@ impl CliArgs {
         param_name: &str,
     ) -> Option<Option<String>> {
         if index + 1 >= args.len() {
-            eprintln!("錯誤: {} 參數缺少數值", param_name);
+            eprintln!("Error: {} parameter requires a value", param_name);
             return None;
         }
         Some(Some(args[index + 1].clone()))
@@ -194,7 +194,7 @@ impl CliArgs {
         // 檢查維度範圍
         if self.dim_start > self.dim_end {
             eprintln!(
-                "錯誤: 維度範圍開始 ({}) 不能大於結束 ({})",
+                "Error: dimension start ({}) cannot be greater than end ({})",
                 self.dim_start, self.dim_end
             );
             return false;
@@ -202,7 +202,7 @@ impl CliArgs {
 
         // 檢查正整數參數
         if self.steps == 0 || self.num_runs == 0 || self.dim_start == 0 {
-            eprintln!("錯誤: steps、runs 和維度參數必須大於 0");
+            eprintln!("Error: steps, runs, and dimension parameters must be greater than 0");
             return false;
         }
 
@@ -222,30 +222,32 @@ impl CliArgs {
 
         if threads > available_threads {
             eprintln!(
-                "警告: 指定的線程數 ({}) 超過系統可用的邏輯線程數 ({})",
+                "Warning: specified thread count ({}) exceeds available logical cores ({})",
                 threads, available_threads
             );
             eprintln!(
-                "這可能會導致性能下降，因為會有線程競爭。建議使用不超過 {} 個線程。",
+                "This may cause performance degradation due to thread contention. Recommend using no more than {} threads.",
                 available_threads
             );
 
             // 如果超過太多，直接拒絕
             if threads > available_threads * 2 {
-                eprintln!("錯誤: 線程數過多，已拒絕執行以避免系統過載。");
+                eprintln!("Error: excessive thread count rejected to avoid system overload.");
                 return false;
             }
 
             // 詢問是否繼續
-            print!("是否要繼續執行？(y/N): ");
+            print!("Do you want to continue? (y/N): ");
             io::stdout().flush().expect("Failed to flush stdout");
 
             let mut input = String::new();
-            io::stdin().read_line(&mut input).expect("讀取輸入失敗");
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to read input");
             let input = input.trim().to_lowercase();
 
             if input != "y" && input != "yes" {
-                println!("已取消執行。");
+                println!("Execution cancelled.");
                 return false;
             }
         }
@@ -255,25 +257,27 @@ impl CliArgs {
 
     /// 顯示幫助信息
     fn print_help(program_name: &str) {
-        println!("用法: {} [選項]", program_name);
+        println!("Usage: {} [OPTIONS]", program_name);
         println!();
-        println!("選項:");
+        println!("Options:");
         println!(
-            "  --threads <int>      設定並行計算使用的線程數量 (預設: {} 個線程)",
+            "  --threads <int>      number of threads for parallel computation (default: {} logical cores)",
             num_cpus::get()
         );
-        println!("  --steps <int>        設定模擬步驟數 (預設: 10,000)");
-        println!("  --runs <int>         設定運行次數 (預設: 10,000,000)");
-        println!("  --dim-start <int>    設定維度範圍開始 (預設: 1)");
-        println!("  --dim-end <int>      設定維度範圍結束 (預設: 12)");
-        println!("  --dim <int>          設定單一維度 (等同於設定相同的 start 和 end)");
+        println!("  --steps <int>        number of simulation steps (default: 10,000)");
+        println!("  --runs <int>         number of runs per model (default: 10,000,000)");
+        println!("  --dim-start <int>    starting matrix dimension (default: 1)");
+        println!("  --dim-end <int>      ending matrix dimension (default: 12)");
         println!(
-            "  --model <list>       指定要計算的模型代號，使用逗號分隔，如 0,2,4 (預設: 0,1,2,3,4)"
+            "  --dim <int>          run a single dimension (sets start and end to the same value)"
         );
-        println!("  --quiet              抑制進度輸出信息");
-        println!("  -h, --help           顯示此幫助信息");
+        println!(
+            "  --model <list>       comma separated list of model numbers to compute (default: 0,1,2,3,4)"
+        );
+        println!("  --quiet              suppress progress output");
+        println!("  -h, --help           show this help message");
         println!();
-        println!("範例:");
+        println!("Examples:");
         println!(
             "  {} --threads 4 --steps 5,000 --runs 1,000,000",
             program_name
@@ -289,13 +293,16 @@ impl CliArgs {
     /// 配置 Rayon 線程池
     pub fn configure_rayon(&self) {
         if let Some(threads) = self.num_threads {
-            println!("設定使用 {} 個線程進行並行計算", threads);
+            println!("Using {} threads for parallel computation", threads);
             rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build_global()
                 .expect("Failed to build thread pool");
         } else {
-            println!("使用預設線程數: {} 個", rayon::current_num_threads());
+            println!(
+                "Using default thread count: {}",
+                rayon::current_num_threads()
+            );
         }
     }
 }
