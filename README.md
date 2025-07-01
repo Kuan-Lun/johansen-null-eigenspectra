@@ -63,8 +63,8 @@ use johansen_null_eigenspectra::johansen_models::JohansenModel;
 // Create simulation with same parameters as command line: --dim 5 --steps 5000 --runs 1000000
 let simulation = EigenvalueSimulation::new(5, 5000, 1000000);
 
-// Read data for Model 0
-match simulation.read_data(JohansenModel::Model0) {
+// Read data for Model 0 (NoInterceptNoTrend)
+match simulation.read_data(JohansenModel::NoInterceptNoTrend) {
     Ok(data) => {
         println!("Loaded {} eigenvalue records", data.len());
         for (seed, eigenvalues) in data.iter().take(5) {
