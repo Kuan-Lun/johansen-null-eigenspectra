@@ -164,12 +164,6 @@ impl AppendOnlyWriter {
 
         Ok(())
     }
-
-    /// 獲取已寫入的數據筆數
-    #[allow(dead_code)]
-    pub fn written_count(&self) -> usize {
-        self.written_count
-    }
 }
 
 /// 讀取追加格式的檔案

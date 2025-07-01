@@ -1,4 +1,4 @@
-use crate::matrix_utils::{dmatrix_cumsum, CumsumOrder};
+use crate::matrix_utils::{CumsumOrder, dmatrix_cumsum};
 
 use nalgebra::DMatrix;
 use num_cpus;
@@ -9,7 +9,6 @@ use rand_distr::StandardNormal;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use rayon::prelude::*;
 
-#[allow(dead_code)]
 pub fn gen_normal_matrix(nrows: usize, ncols: usize, seed: u64) -> DMatrix<f64> {
     let total = nrows.checked_mul(ncols).expect("Matrix too large");
     let mut data = vec![0.0; total];
@@ -40,10 +39,10 @@ pub fn gen_normal_matrix(nrows: usize, ncols: usize, seed: u64) -> DMatrix<f64> 
 
 // 布朗運動矩陣的時間軸方向
 // 定義時間軸沿著矩陣的哪個方向
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum TimeAxisDirection {
     AlongColumns,
+    #[allow(dead_code)]
     AlongRows,
 }
 

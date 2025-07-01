@@ -31,14 +31,12 @@ impl EigenvalueSimulation {
 
     /// 運行支援斷點續傳的大規模特徵值計算並保存結果
     /// 這是主要的模擬運算接口，會對所有模型進行計算
-    #[allow(dead_code)]
     pub fn run_simulation(&self, models: &[JohansenModel]) {
         self.run_simulation_internal(models, false);
     }
 
     /// 運行模擬（安靜模式）
     /// 不輸出進度信息，適合在批量處理或測試環境中使用
-    #[allow(dead_code)] // 此方法在集成測試中使用
     pub fn run_simulation_quiet(&self, models: &[JohansenModel]) {
         self.run_simulation_internal(models, true);
     }
@@ -77,7 +75,6 @@ impl EigenvalueSimulation {
     }
 
     /// 讀取所有模型的特徵值數據
-    #[allow(dead_code)]
     pub fn read_all_data(&self) -> Vec<(JohansenModel, std::io::Result<Vec<(u64, Vec<f64>)>>)> {
         JohansenModel::all_models()
             .into_iter()

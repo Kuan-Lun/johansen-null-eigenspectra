@@ -2,7 +2,6 @@
 ///
 /// 這個 enum 定義了 Johansen 協整檢驗中常用的五種模型規格，
 /// 每種模型對應不同的趨勢和截距假設。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JohansenModel {
     /// Model 0: 無截距項，無趨勢項
@@ -128,7 +127,6 @@ impl JohansenModel {
     }
 }
 
-#[allow(dead_code)]
 impl Default for JohansenModel {
     /// 默認使用 Model 2（最常用的模型）
     fn default() -> Self {
@@ -136,7 +134,6 @@ impl Default for JohansenModel {
     }
 }
 
-#[allow(dead_code)]
 impl std::fmt::Display for JohansenModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Model {}: {}", self.to_number(), self.description())

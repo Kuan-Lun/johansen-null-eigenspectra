@@ -232,37 +232,3 @@ fn run_single_model_simulation(
         println!("===============================\n");
     }
 }
-
-/// 進行大規模模擬的主函數
-#[allow(dead_code)]
-pub fn run_large_scale_simulation(
-    dim: usize,
-    steps: usize,
-    num_runs: usize,
-    get_filename_fn: impl Fn(JohansenModel) -> String + Copy,
-    quiet: bool,
-) {
-    if !quiet {
-        println!("Starting large-scale simulation - supports resuming from checkpoint");
-        println!(
-            "Dimensions: {}, Steps: {}, Runs: {}",
-            dim,
-            format_number_with_commas(steps),
-            format_number_with_commas(num_runs)
-        );
-        println!(
-            "Supported models: {}",
-            JohansenModel::all_models()
-                .iter()
-                .map(|m| format!("{}", m))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        println!("===============================");
-    }
-
-    // 計算所有模型
-    for model in JohansenModel::all_models() {
-        run_model_simulation(dim, steps, num_runs, get_filename_fn, model, quiet);
-    }
-}

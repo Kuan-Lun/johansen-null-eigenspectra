@@ -156,7 +156,6 @@ pub fn format_remaining_time(elapsed: Duration, completed: usize, total: usize) 
 /// assert_eq!(format_percentage(1, 3, Some(2)), "33.33%");
 /// assert_eq!(format_percentage(0, 100, None), "0.0%");
 /// ```
-#[allow(dead_code)]
 pub fn format_percentage(completed: usize, total: usize, decimal_places: Option<usize>) -> String {
     if total == 0 {
         return "0.0%".to_string();

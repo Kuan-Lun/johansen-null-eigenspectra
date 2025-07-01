@@ -1,15 +1,15 @@
 use nalgebra::DMatrix;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum CumsumOrder {
+    #[allow(dead_code)]
     ColumnMajor, // 全矩陣，依照 column-major 順序累加
-    RowMajor,    // 全矩陣，依照 row-major 順序累加
-    ColumnWise,  // 每一欄各自累加
-    RowWise,     // 每一列各自累加
+    #[allow(dead_code)]
+    RowMajor, // 全矩陣，依照 row-major 順序累加
+    ColumnWise, // 每一欄各自累加
+    RowWise,    // 每一列各自累加
 }
 
-#[allow(dead_code)]
 pub fn dmatrix_cumsum(matrix: &DMatrix<f64>, order: CumsumOrder) -> DMatrix<f64> {
     match order {
         CumsumOrder::ColumnMajor => {
@@ -64,7 +64,6 @@ pub fn dmatrix_cumsum(matrix: &DMatrix<f64>, order: CumsumOrder) -> DMatrix<f64>
     }
 }
 
-#[allow(dead_code)]
 pub fn sum_of_outer_products(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
     use rayon::prelude::*;
 
