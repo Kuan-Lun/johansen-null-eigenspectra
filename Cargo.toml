@@ -11,3 +11,25 @@ nalgebra-lapack = { git = "https://github.com/dimforge/nalgebra", package = "nal
 rand_xoshiro = "0.7.0"
 rayon = "1.10.0"
 num_cpus = "1.17.0"
+
+[profile.release]
+# 啟用鏈接時優化 (LTO) - 會增加編譯時間但提高運行性能
+lto = true
+# 啟用 fat LTO，對於單個二進制文件提供最好的優化
+# lto = "fat"  # 可選：如果想要最激進的優化
+
+# 設置代碼生成單位數量為 1，允許更好的優化
+codegen-units = 1
+
+# 使用更激進的優化級別
+opt-level = 3
+# opt-level = "s"  # 可選：如果想優化文件大小而不是性能
+
+# 不包含調試信息以減小文件大小
+debug = false
+
+# 使用更激進的panic策略
+panic = "abort"
+
+# 允許編譯器進行更激進的優化
+overflow-checks = false
