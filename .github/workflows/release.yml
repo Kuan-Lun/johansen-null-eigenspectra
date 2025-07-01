@@ -131,7 +131,11 @@ jobs:
           
           ### 🔧 Requirements
           
-          - No additional dependencies required for the pre-compiled binaries
-          - For building from source: Rust, C compiler, and LAPACK
+          **For pre-compiled binaries:**
+          - **Linux**: Requires system LAPACK/BLAS libraries (usually pre-installed or available via package manager)
+          - **macOS**: No additional dependencies (uses built-in Accelerate framework)
+          
+          **For building from source:**
+          - Rust toolchain, C compiler, and LAPACK development libraries
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
