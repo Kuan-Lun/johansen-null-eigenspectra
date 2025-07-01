@@ -8,7 +8,7 @@ To build the project you need a working C compiler and LAPACK. See [BUILD.md](./
 
 The binary accepts several options. The following list mirrors the help output from `src/cli.rs`:
 
-```bash
+```text
 --threads <int>      number of threads for parallel computation (default: number of logical cores)
 --steps <int>        number of simulation steps (default: 10,000)
 --runs <int>         number of runs per model (default: 10,000,000)
