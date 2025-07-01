@@ -6,11 +6,9 @@ This project performs large scale Monte Carlo simulations of the eigenvalues tha
 
 ### Option 1: Download Binary (Recommended)
 
-1. Go to the [Releases page](https://github.com/YOUR_USERNAME/johansen-null-eigenspectra/releases) *(replace YOUR_USERNAME with your GitHub username)*
+1. Go to the [Releases page](https://github.com/Kuan-Lun/johansen-null-eigenspectra/releases)
 2. Download the binary for your platform
-3. Run the help command:
-   - **Windows**: `johansen-null-eigenspectra.exe --help`
-   - **Linux/macOS**: `./johansen-null-eigenspectra --help`
+3. Run the help command: `./johansen-null-eigenspectra --help`
 
 ### Option 2: Build from Source
 
@@ -21,10 +19,6 @@ Requires a working C compiler and LAPACK. See [BUILD.md](./BUILD.md) for compile
 cargo build --release
 
 # Run the built binary:
-# Windows
-target\release\johansen-null-eigenspectra.exe --help
-
-# Linux/macOS
 ./target/release/johansen-null-eigenspectra --help
 ```
 
@@ -49,10 +43,6 @@ The binary accepts several options. The following list mirrors the help output f
 This example runs the simulation for dimension 5 with 5,000 steps and 1,000,000 runs per model using 4 threads:
 
 ```bash
-# Windows
-johansen-null-eigenspectra.exe --threads 4 --steps 5,000 --runs 1,000,000 --dim 5
-
-# Linux/macOS  
 ./johansen-null-eigenspectra --threads 4 --steps 5,000 --runs 1,000,000 --dim 5
 
 # Building from source

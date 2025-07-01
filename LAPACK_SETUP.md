@@ -53,59 +53,6 @@ No additional dependencies are needed.
 
 ---
 
-### Windows (MSVC)
-
-On Windows, the recommended approach is to install OpenBLAS via [vcpkg](https://vcpkg.io).
-
-#### Step 1: Install vcpkg
-
-```powershell
-git clone https://github.com/microsoft/vcpkg.git
-cd vcpkg
-.\bootstrap-vcpkg.bat
-```
-
-> Requires **Visual Studio Build Tools** with the "Desktop development with C++" workload.
-
-#### Step 2: Install OpenBLAS
-
-```powershell
-.\vcpkg install openblas:x64-windows
-```
-
-This installs `openblas.lib` into:
-
-```bash
-<vcpkg-root>\installed\x64-windows\lib\openblas.lib
-```
-
-#### Step 3: Project Configuration
-
-1. Copy `openblas.lib` to the same directory where you will run `cargo build`.
-2. Add the following to your `.cargo/config.toml`:
-
-```toml
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-L.", "-lopenblas"]
-```
-
-This tells Rust to link `openblas.lib` from the current directory.
-
-#### Step 4: Confirm MSVC Toolchain
-
-```sh
-rustup show
-```
-
-Ensure the default host is `x86_64-pc-windows-msvc`.
-If not, switch using:
-
-```sh
-rustup default stable-x86_64-pc-windows-msvc
-```
-
----
-
 ## Building the Project
 
 Once your LAPACK setup is complete:
@@ -126,9 +73,9 @@ undefined reference to `dggev_`
 
 Verify:
 
-* The correct `.so`, `.dylib`, or `.lib` is present and in the expected location
+* The correct `.so` or `.dylib` is present and in the expected location
 * The linker flags in `.cargo/config.toml` are correct for your platform
-* You are using the correct Rust toolchain (e.g., MSVC on Windows)
+* You are using the correct Rust toolchain
 
 ---
 

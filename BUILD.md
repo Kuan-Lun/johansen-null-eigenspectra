@@ -45,14 +45,6 @@ brew install lapack
 
 ---
 
-## Windows (Native, *Not WSL*)
-
-This project is intended to be built in [WSL](https://learn.microsoft.com/en-us/windows/wsl/). Building natively on Windows may work with [MSVC](https://visualstudio.microsoft.com/) toolchain, but is untested.
-
-For best results, use WSL with the instructions above.
-
----
-
 ## Verify
 
 After setup, run:

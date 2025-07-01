@@ -11,14 +11,3 @@ rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Accelerate"]
 
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Accelerate"]
-
-# Windows MSVC: link to LAPACK .lib in custom path
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-L.", "-lopenblas"]
-
-# Windows GNU: use MSYS2/MinGW LAPACK with proper library paths
-[target.x86_64-pc-windows-gnu]
-rustflags = [
-    "-L", "/mingw64/lib", 
-    "-lopenblas",
-]

@@ -17,10 +17,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
             binary_name: johansen-null-eigenspectra
             asset_name: johansen-null-eigenspectra-linux-x86_64
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-            binary_name: johansen-null-eigenspectra.exe
-            asset_name: johansen-null-eigenspectra-windows-x86_64.exe
           - os: macos-latest
             target: x86_64-apple-darwin
             binary_name: johansen-null-eigenspectra
@@ -49,38 +45,7 @@ jobs:
       run: |
         brew install openblas lapack
     
-    - name: Setup MSYS2 (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: MINGW64
-        install: >-
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-openblas
-          mingw-w64-x86_64-lapack
-          mingw-w64-x86_64-pkg-config
-    
-    - name: Debug library files (Windows)
-      if: matrix.os == 'windows-latest'
-      shell: msys2 {0}
-      run: |
-        find /mingw64/lib -name "*openblas*" -o -name "*lapack*" -o -name "*blas*"
-        pkg-config --cflags --libs openblas || echo "openblas pkg-config failed"
-        pkg-config --cflags --libs lapack || echo "lapack pkg-config failed"
-    
-    - name: Set MSYS2 environment for Rust (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
-        echo "PKG_CONFIG_PATH=C:\msys64\mingw64\lib\pkgconfig" >> $env:GITHUB_ENV
-        echo "LIBRARY_PATH=C:\msys64\mingw64\lib" >> $env:GITHUB_ENV
-    
-    - name: Build (Windows)
-      if: matrix.os == 'windows-latest'
-      run: cargo build --release --target ${{ matrix.target }}
-    
-    - name: Build (Non-Windows)
-      if: matrix.os != 'windows-latest'
+    - name: Build
       run: cargo build --release --target ${{ matrix.target }}
     
     - name: Upload artifact
@@ -106,7 +71,6 @@ jobs:
       with:
         files: |
           johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra
-          johansen-null-eigenspectra-windows-x86_64.exe/johansen-null-eigenspectra.exe
           johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra
           johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra
         draft: true
@@ -123,7 +87,7 @@ jobs:
           - Support for all 5 Johansen model types (0-4)
           - Multi-threaded parallel computation using Rust and LAPACK
           - Configurable simulation parameters (dimensions, steps, runs)
-          - Cross-platform binaries for Linux, Windows, and macOS
+          - Cross-platform binaries for Linux and macOS
           - Data export to `.dat` files for further analysis
           - Command-line interface with comprehensive options
           
