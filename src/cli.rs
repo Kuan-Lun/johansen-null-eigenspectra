@@ -277,6 +277,13 @@ impl CliArgs {
         println!("  --quiet              suppress progress output");
         println!("  -h, --help           show this help message");
         println!();
+        println!("Model Numbers:");
+        println!("  0: No intercept, no trend");
+        println!("  1: Intercept, no trend, intercept in cointegration");
+        println!("  2: Intercept, no trend, intercept not fully explained by cointegration");
+        println!("  3: Intercept, trend, trend in cointegration");
+        println!("  4: Intercept, trend, intercept and trend not fully explained by cointegration");
+        println!();
         println!("Examples:");
         println!(
             "  {} --threads 4 --steps 5,000 --runs 1,000,000",
