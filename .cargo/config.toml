@@ -7,7 +7,10 @@ rustflags = ["-llapack"]
 
 # macOS: use Apple Accelerate framework
 [target.x86_64-apple-darwin]
-rustflags = ["-framework", "Accelerate"]
+rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Accelerate"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Accelerate"]
 
 # Windows MSVC: link to LAPACK .lib in custom path
 [target.x86_64-pc-windows-msvc]
