@@ -130,17 +130,24 @@ impl CliArgs {
         Some(config)
     }
 
-    /// 解析下一個參數值
+    /// 解析下一個參數值（支援逗號分隔的數字）
     fn parse_next_arg(args: &[String], index: usize, param_name: &str) -> Option<Option<usize>> {
         if index + 1 >= args.len() {
             eprintln!("錯誤: {} 參數缺少數值", param_name);
             return None;
         }
 
-        match args[index + 1].parse::<usize>() {
+        let input = &args[index + 1];
+        // 移除逗號後再解析
+        let cleaned_input = input.replace(',', "");
+
+        match cleaned_input.parse::<usize>() {
             Ok(value) => Some(Some(value)),
             Err(_) => {
-                eprintln!("錯誤: {} 參數必須是正整數", param_name);
+                eprintln!(
+                    "錯誤: {} 參數必須是正整數（可使用逗號分隔，如：1,000,000）",
+                    param_name
+                );
                 None
             }
         }
@@ -267,10 +274,16 @@ impl CliArgs {
         println!("  -h, --help           顯示此幫助信息");
         println!();
         println!("範例:");
-        println!("  {} --threads 4 --steps 5000 --runs 1000000", program_name);
+        println!(
+            "  {} --threads 4 --steps 5,000 --runs 1,000,000",
+            program_name
+        );
         println!("  {} --dim 5 --threads 8", program_name);
-        println!("  {} --dim-start 2 --dim-end 8 --runs 500000", program_name);
-        println!("  {} --model 0,2 --runs 100000", program_name);
+        println!(
+            "  {} --dim-start 2 --dim-end 8 --runs 500,000",
+            program_name
+        );
+        println!("  {} --model 0,2 --runs 100,000", program_name);
     }
 
     /// 配置 Rayon 線程池
