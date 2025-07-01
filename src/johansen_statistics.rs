@@ -62,7 +62,7 @@ pub fn calculate_eigenvalues(
     seed: u64,
     model: JohansenModel,
 ) -> Vec<f64> {
-    use crate::rng_matrix::{TimeAxisDirection, brownian_motion_matrix};
+    use crate::rng_matrix::{brownian_motion_matrix, TimeAxisDirection};
 
     let delta_t = 1.0 / (steps as f64);
     let bm = brownian_motion_matrix(

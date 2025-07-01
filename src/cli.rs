@@ -2,6 +2,7 @@
 //!
 //! 提供命令行參數的解析、驗證和幫助信息顯示功能。
 
+use crate::johansen_models::JohansenModel;
 use std::io::{self, Write};
 
 /// 命令行參數配置
@@ -12,7 +13,8 @@ pub struct CliArgs {
     pub num_runs: usize,
     pub dim_start: usize,
     pub dim_end: usize,
-    pub quiet: bool, // 新增 quiet 參數
+    pub models: Option<Vec<JohansenModel>>,
+    pub quiet: bool,
 }
 
 impl Default for CliArgs {
@@ -23,6 +25,7 @@ impl Default for CliArgs {
             num_runs: 1e7 as usize,
             dim_start: 1,
             dim_end: 12,
+            models: None,
             quiet: false, // 預設為 false
         }
     }
@@ -93,6 +96,20 @@ impl CliArgs {
                     }
                     i += 2;
                 }
+                "--model" => {
+                    if let Some(value) = Self::parse_next_string(&args, i, "--model")? {
+                        match Self::parse_models(&value) {
+                            Ok(models) => config.models = Some(models),
+                            Err(e) => {
+                                eprintln!("錯誤: {}", e);
+                                return None;
+                            }
+                        }
+                    } else {
+                        return None;
+                    }
+                    i += 2;
+                }
                 "--quiet" => {
                     config.quiet = true;
                     i += 1;
@@ -126,6 +143,42 @@ impl CliArgs {
                 eprintln!("錯誤: {} 參數必須是正整數", param_name);
                 None
             }
+        }
+    }
+    /// 解析下一個參數字串
+    fn parse_next_string(
+        args: &[String],
+        index: usize,
+        param_name: &str,
+    ) -> Option<Option<String>> {
+        if index + 1 >= args.len() {
+            eprintln!("錯誤: {} 參數缺少數值", param_name);
+            return None;
+        }
+        Some(Some(args[index + 1].clone()))
+    }
+
+    /// 從逗號分隔的字串解析模型列表
+    fn parse_models(s: &str) -> Result<Vec<JohansenModel>, String> {
+        let mut models = Vec::new();
+        for part in s.split(',') {
+            let part_trim = part.trim();
+            if part_trim.is_empty() {
+                continue;
+            }
+            match part_trim
+                .parse::<u8>()
+                .ok()
+                .and_then(JohansenModel::from_number)
+            {
+                Some(m) => models.push(m),
+                None => return Err(format!("無效的模型代號: {}", part_trim)),
+            }
+        }
+        if models.is_empty() {
+            Err("模型列表不可為空".to_string())
+        } else {
+            Ok(models)
         }
     }
 
@@ -207,12 +260,16 @@ impl CliArgs {
         println!("  --dim-start <int>    設定維度範圍開始 (預設: 1)");
         println!("  --dim-end <int>      設定維度範圍結束 (預設: 12)");
         println!("  --dim <int>          設定單一維度 (等同於設定相同的 start 和 end)");
+        println!(
+            "  --model <list>       指定要計算的模型代號，使用逗號分隔，如 0,2,4 (預設: 0,1,2,3,4)"
+        );
         println!("  -h, --help           顯示此幫助信息");
         println!();
         println!("範例:");
         println!("  {} --threads 4 --steps 5000 --runs 1000000", program_name);
         println!("  {} --dim 5 --threads 8", program_name);
         println!("  {} --dim-start 2 --dim-end 8 --runs 500000", program_name);
+        println!("  {} --model 0,2 --runs 100000", program_name);
     }
 
     /// 配置 Rayon 線程池

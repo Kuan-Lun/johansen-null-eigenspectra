@@ -1,4 +1,4 @@
-use crate::matrix_utils::{CumsumOrder, dmatrix_cumsum};
+use crate::matrix_utils::{dmatrix_cumsum, CumsumOrder};
 
 use nalgebra::DMatrix;
 use num_cpus;

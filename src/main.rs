@@ -39,10 +39,15 @@ fn main() {
             format_number_with_commas(args.steps),
             format_number_with_commas(args.num_runs)
         );
+        let models_vec = args
+            .models
+            .clone()
+            .unwrap_or_else(|| JohansenModel::all_models().to_vec());
         if args.quiet {
-            EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation_quiet();
+            EigenvalueSimulation::new(dim, args.steps, args.num_runs)
+                .run_simulation_quiet(&models_vec);
         } else {
-            EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation();
+            EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation(&models_vec);
         }
         let elapsed_time = start_time.elapsed();
         println!("模擬完成！耗時: {}", format_duration(elapsed_time));
