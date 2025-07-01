@@ -18,4 +18,4 @@ rustflags = ["-L.", "-lopenblas"]
 
 # Windows GNU: use MSYS2/MinGW LAPACK
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-lopenblas", "-llapack"]
+rustflags = ["-L", "C:/msys64/mingw64/lib", "-lopenblas", "-llapack"]
