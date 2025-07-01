@@ -195,14 +195,10 @@ fn run_single_model_simulation(
                     }
                 }
                 Ok(Err(e)) => {
-                    if !quiet {
-                        eprintln!("Writer thread error: {}", e);
-                    }
+                    panic!("Writer thread error: {}", e);
                 }
                 Err(_) => {
-                    if !quiet {
-                        eprintln!("Writer thread panic");
-                    }
+                    panic!("Writer thread panic");
                 }
             }
 
@@ -228,9 +224,7 @@ fn run_single_model_simulation(
             }
         }
         Err(e) => {
-            if !quiet {
-                eprintln!("Failed to check progress: {}", e);
-            }
+            panic!("Failed to check progress: {}", e);
         }
     }
 
