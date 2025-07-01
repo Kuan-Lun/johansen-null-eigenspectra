@@ -41,28 +41,6 @@ fn calculate_eigenvalues_parallel(
         let chunk_end = ((chunk_idx + 1) * chunk_size).min(total_seeds);
         let chunk_seeds = &seeds[chunk_start..chunk_end];
 
-        // 注意：進度報告已移至 append_writer，避免重複顯示
-        // if !quiet {
-        //     let progress_ratio = chunk_end as f64 / total_seeds as f64;
-        //
-        //     if progress_ratio > 0.0 {
-        //         println!(
-        //             "處理進度: {}/{} ({:.1}%) - {}",
-        //             chunk_end,
-        //             total_seeds,
-        //             progress_ratio * 100.0,
-        //             format_remaining_time(elapsed, chunk_end, total_seeds)
-        //         );
-        //     } else {
-        //         println!(
-        //             "處理進度: {}/{} ({:.1}%)",
-        //             chunk_end,
-        //             total_seeds,
-        //             progress_ratio * 100.0
-        //         );
-        //     }
-        // }
-
         // 並行計算這個chunk的結果
         chunk_seeds.into_par_iter().for_each(|&seed| {
             let eigenvalues = calculate_eigenvalues(dim, steps, seed, model);
