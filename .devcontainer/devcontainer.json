@@ -1,13 +1,29 @@
 {
     "name": "Rust + LAPACK Dev Container",
     "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "Dockerfile",
+        "context": ".."
     },
-    "settings": {
-        "terminal.integrated.shell.linux": "/bin/bash"
+    "workspaceFolder": "/usr/src/app",
+    "remoteUser": "root",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "rust-analyzer.rustfmt.enable": true,
+                "editor.formatOnSave": true,
+                "[rust]": {
+                    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+                }
+            },
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "tamasfe.even-better-toml",
+                "github.copilot",
+                "ms-azuretools.vscode-docker"
+            ]
+        }
     },
-    "extensions": [
-        "rust-lang.rust-analyzer",
-        "github.copilot"
-    ]
+    "postCreateCommand": "cargo --version && rustfmt --version && cargo clippy --version",
+    "shutdownAction": "stopContainer"
 }
