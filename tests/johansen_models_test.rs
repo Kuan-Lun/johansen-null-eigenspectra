@@ -45,23 +45,23 @@ fn test_from_number() {
 fn test_model_descriptions() {
     assert_eq!(
         JohansenModel::NoInterceptNoTrend.description(),
-        "無截距項，無趨勢項"
+        "No intercept, no trend"
     );
     assert_eq!(
         JohansenModel::InterceptNoTrendWithInterceptInCoint.description(),
-        "有截距項，無趨勢項，協整關係中有截距"
+        "Intercept, no trend, intercept in cointegration"
     );
     assert_eq!(
         JohansenModel::InterceptNoTrendNoInterceptInCoint.description(),
-        "有截距項，無趨勢項，截距無法完全由協整解釋"
+        "Intercept, no trend, intercept not fully explained by cointegration"
     );
     assert_eq!(
         JohansenModel::InterceptTrendWithTrendInCoint.description(),
-        "有截距項，有趨勢項，協整關係中有趨勢"
+        "Intercept, trend, trend in cointegration"
     );
     assert_eq!(
         JohansenModel::InterceptTrendNoTrendInCoint.description(),
-        "有截距項，有趨勢項，趨勢無法完全由協整解釋"
+        "Intercept, trend, intercept and trend not fully explained by cointegration"
     );
 }
 
@@ -147,23 +147,23 @@ fn test_default() {
 fn test_display() {
     assert_eq!(
         JohansenModel::NoInterceptNoTrend.to_string(),
-        "Model 0: 無截距項，無趨勢項"
+        "Model 0: No intercept, no trend"
     );
     assert_eq!(
         JohansenModel::InterceptNoTrendWithInterceptInCoint.to_string(),
-        "Model 1: 有截距項，無趨勢項，協整關係中有截距"
+        "Model 1: Intercept, no trend, intercept in cointegration"
     );
     assert_eq!(
         JohansenModel::InterceptNoTrendNoInterceptInCoint.to_string(),
-        "Model 2: 有截距項，無趨勢項，截距無法完全由協整解釋"
+        "Model 2: Intercept, no trend, intercept not fully explained by cointegration"
     );
     assert_eq!(
         JohansenModel::InterceptTrendWithTrendInCoint.to_string(),
-        "Model 3: 有截距項，有趨勢項，協整關係中有趨勢"
+        "Model 3: Intercept, trend, trend in cointegration"
     );
     assert_eq!(
         JohansenModel::InterceptTrendNoTrendInCoint.to_string(),
-        "Model 4: 有截距項，有趨勢項，趨勢無法完全由協整解釋"
+        "Model 4: Intercept, trend, intercept and trend not fully explained by cointegration"
     );
 }
 
