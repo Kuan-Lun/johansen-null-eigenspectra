@@ -2,7 +2,31 @@
 
 This project performs large scale Monte Carlo simulations of the eigenvalues that appear in Johansen's null distribution. Results are written to `*.dat` files which can be reloaded later for analysis.
 
-To build the project you need a working C compiler and LAPACK. See [BUILD.md](./BUILD.md) for compiler setup and [LAPACK_SETUP.md](./LAPACK_SETUP.md) if your system does not already provide LAPACK/BLAS.
+## Quick Start
+
+### Option 1: Download Binary (Recommended)
+
+1. Go to the [Releases page](https://github.com/YOUR_USERNAME/johansen-null-eigenspectra/releases) *(replace YOUR_USERNAME with your GitHub username)*
+2. Download the binary for your platform
+3. Run the help command:
+   - **Windows**: `johansen-null-eigenspectra.exe --help`
+   - **Linux/macOS**: `./johansen-null-eigenspectra --help`
+
+### Option 2: Build from Source
+
+Requires a working C compiler and LAPACK. See [BUILD.md](./BUILD.md) for compiler setup and [LAPACK_SETUP.md](./LAPACK_SETUP.md) if your system does not already provide LAPACK/BLAS.
+
+```bash
+# For source builds (all platforms)
+cargo build --release
+
+# Run the built binary:
+# Windows
+target\release\johansen-null-eigenspectra.exe --help
+
+# Linux/macOS
+./target/release/johansen-null-eigenspectra --help
+```
 
 ## Command line interface
 
@@ -20,13 +44,20 @@ The binary accepts several options. The following list mirrors the help output f
 -h, --help           show this help message
 ```
 
-A typical invocation is:
+## Usage Examples
+
+This example runs the simulation for dimension 5 with 5,000 steps and 1,000,000 runs per model using 4 threads:
 
 ```bash
+# Windows
+johansen-null-eigenspectra.exe --threads 4 --steps 5,000 --runs 1,000,000 --dim 5
+
+# Linux/macOS  
+./johansen-null-eigenspectra --threads 4 --steps 5,000 --runs 1,000,000 --dim 5
+
+# Building from source
 cargo run --release -- --threads 4 --steps 5,000 --runs 1,000,000 --dim 5
 ```
-
-This example runs the simulation for dimension 5 with 5,000 steps and 1,000,000 runs per model using 4 threads.
 
 **Note**: Numeric arguments support comma separators for better readability (e.g., `--runs 1,000,000` or `--runs 1000000`).
 
