@@ -54,16 +54,18 @@ impl JohansenModel {
     /// 返回模型的描述名稱
     pub fn description(&self) -> &'static str {
         match self {
-            JohansenModel::NoInterceptNoTrend => "無截距項，無趨勢項",
+            JohansenModel::NoInterceptNoTrend => "No intercept, no trend",
             JohansenModel::InterceptNoTrendWithInterceptInCoint => {
-                "有截距項，無趨勢項，協整關係中有截距"
+                "Intercept, no trend, intercept in cointegration"
             }
             JohansenModel::InterceptNoTrendNoInterceptInCoint => {
-                "有截距項，無趨勢項，截距無法完全由協整解釋"
+                "Intercept, no trend, intercept not fully explained by cointegration"
             }
-            JohansenModel::InterceptTrendWithTrendInCoint => "有截距項，有趨勢項，協整關係中有趨勢",
+            JohansenModel::InterceptTrendWithTrendInCoint => {
+                "Intercept, trend, trend in cointegration"
+            }
             JohansenModel::InterceptTrendNoTrendInCoint => {
-                "有截距項，有趨勢項，趨勢無法完全由協整解釋"
+                "Intercept, trend, intercept and trend not fully explained by cointegration"
             }
         }
     }
