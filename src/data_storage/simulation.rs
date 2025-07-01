@@ -91,20 +91,23 @@ impl EigenvalueSimulation {
     /// 確保檔案命名邏輯的一致性。如果需要自定義檔案命名規則，
     /// 可以繼承此 struct 並重寫此方法。
     ///
-    /// 檔案會自動存放在 data/ 資料夾中，資料夾會在需要時自動創建。
+    /// 檔案會自動存放在 data/ 資料夾中，如果資料夾不存在會自動創建。
+    /// 如果創建資料夾失敗，程式會 panic，因為沒有資料夾就無法儲存檔案。
     /// 使用 PathBuf 確保跨平台路徑分隔符的正確性。
     pub fn get_filename(&self, model: JohansenModel) -> String {
         use std::path::PathBuf;
 
-        // 確保 data 資料夾存在
+        // 確保 data 資料夾存在，失敗時應該 panic 而不是繼續
         let data_dir = PathBuf::from("data");
-        if let Err(e) = std::fs::create_dir_all(&data_dir) {
-            eprintln!(
-                "Warning: Unable to create directory {}: {}",
+        std::fs::create_dir_all(&data_dir).unwrap_or_else(|e| {
+            panic!(
+                "Failed to create data directory '{}': {}. \
+                 This is required for storing simulation results. \
+                 Please check file system permissions.",
                 data_dir.display(),
                 e
             );
-        }
+        });
 
         // 使用 PathBuf 構建跨平台的檔案路徑，使用新的檔案擴展名
         let filename = format!(
