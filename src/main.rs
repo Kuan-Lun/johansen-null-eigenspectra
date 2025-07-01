@@ -22,19 +22,19 @@ fn main() {
     // 配置 Rayon 線程池
     args.configure_rayon();
 
-    println!("=== 大規模模擬演示 ===");
-    println!("開始運行模擬（支援斷點續傳）...");
-    println!("參數設定:");
-    println!("  步驟數: {}", format_number_with_commas(args.steps));
-    println!("  運行次數: {}", format_number_with_commas(args.num_runs));
-    println!("  維度範圍: {} - {}", args.dim_start, args.dim_end);
-    println!("  線程數: {}", rayon::current_num_threads());
+    println!("=== Large-scale Simulation Demo ===");
+    println!("Starting simulation (supports resuming from checkpoint)...");
+    println!("Configuration:");
+    println!("  Steps: {}", format_number_with_commas(args.steps));
+    println!("  Runs: {}", format_number_with_commas(args.num_runs));
+    println!("  Dimension range: {} - {}", args.dim_start, args.dim_end);
+    println!("  Threads: {}", rayon::current_num_threads());
     println!();
 
     for dim in args.dim_start..=args.dim_end {
         let start_time = Instant::now();
         println!(
-            "模擬設定: {} 維度, {} 步驟, {} 次運行",
+            "Simulation config: {} dimensions, {} steps, {} runs",
             dim,
             format_number_with_commas(args.steps),
             format_number_with_commas(args.num_runs)
@@ -50,16 +50,19 @@ fn main() {
             EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation(&models_vec);
         }
         let elapsed_time = start_time.elapsed();
-        println!("模擬完成！耗時: {}", format_duration(elapsed_time));
+        println!(
+            "Simulation completed! Duration: {}",
+            format_duration(elapsed_time)
+        );
     }
 
-    println!("\n=== 結果讀取演示 ===");
+    println!("\n=== Result Reading Demo ===");
 
     // 讀取特定模型的數據
-    println!("開始讀取模型數據...");
+    println!("Starting to read model data...");
     let simulation = EigenvalueSimulation::new(args.dim_start, args.steps, args.num_runs);
     println!(
-        "模擬設定: {} 維度, {} 步驟, {} 次運行",
+        "Simulation config: {} dimensions, {} steps, {} runs",
         simulation.dim,
         format_number_with_commas(simulation.steps),
         format_number_with_commas(simulation.num_runs)
@@ -68,13 +71,13 @@ fn main() {
     match simulation.read_data(model) {
         Ok(data) => {
             println!(
-                "成功讀取模型 {} 的數據: {} 筆記錄",
+                "Successfully read data for model {}: {} records",
                 model,
                 format_number_with_commas(data.len())
             );
 
             // 顯示前5筆數據作為範例
-            println!("前5筆數據範例:");
+            println!("First 5 data records as examples:");
 
             // 計算前5筆數據的最大寬度以對齊顯示
             let preview_data: Vec<_> = data.iter().take(5).collect();
@@ -112,7 +115,7 @@ fn main() {
             for (i, (seed, eigenvalues)) in preview_data.iter().enumerate() {
                 let eigenvalue_str = &eigenvalue_strs[i];
                 println!(
-                    "  第{:2}筆: seed={:width1$}, 特徵值總和={:width2$.6}, 特徵值=[{:width3$}]",
+                    "  Record {:2}: seed={:width1$}, eigenvalue sum={:width2$.6}, eigenvalues=[{:width3$}]",
                     i + 1,
                     seed,
                     eigenvalues.iter().sum::<f64>(),
@@ -123,22 +126,22 @@ fn main() {
                 );
             }
         }
-        Err(e) => println!("讀取失敗: {}", e),
+        Err(e) => println!("Failed to read data: {}", e),
     }
 
     // 展示所有模型的狀態
-    println!("\n=== 所有模型狀態 ===");
+    println!("\n=== All Models Status ===");
     let all_data = simulation.read_all_data();
     for (model, result) in all_data {
         match result {
             Ok(data) => println!(
-                "  {} : {} 筆數據",
+                "  {}: {} data records",
                 model,
                 format_number_with_commas(data.len())
             ),
-            Err(_) => println!("  {} : 無數據或讀取失敗", model),
+            Err(_) => println!("  {}: No data or read failed", model),
         }
     }
 
-    println!("\n演示完成！");
+    println!("\nDemo completed!");
 }
