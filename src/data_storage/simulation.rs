@@ -46,9 +46,11 @@ impl EigenvalueSimulation {
     /// 內部運行方法
     fn run_simulation_internal(&self, models: &[JohansenModel], quiet: bool) {
         if !quiet {
-            println!("開始大規模特徵值模擬計算 (支援斷點續傳)...");
             println!(
-                "維度: {}, 步驟數: {}, 運行次數: {}",
+                "Starting large-scale eigenvalue simulation (supports resuming from checkpoint)..."
+            );
+            println!(
+                "Dimensions: {}, Steps: {}, Runs: {}",
                 format_number_with_commas(self.dim),
                 format_number_with_commas(self.steps),
                 format_number_with_commas(self.num_runs)
@@ -97,7 +99,11 @@ impl EigenvalueSimulation {
         // 確保 data 資料夾存在
         let data_dir = PathBuf::from("data");
         if let Err(e) = std::fs::create_dir_all(&data_dir) {
-            eprintln!("警告: 無法創建資料夾 {}: {}", data_dir.display(), e);
+            eprintln!(
+                "Warning: Unable to create directory {}: {}",
+                data_dir.display(),
+                e
+            );
         }
 
         // 使用 PathBuf 構建跨平台的檔案路徑，使用新的檔案擴展名
