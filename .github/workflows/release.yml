@@ -79,13 +79,30 @@ jobs:
         echo "All files in current directory:"
         find . -type f
     
+    - name: Prepare release files
+      run: |
+        # Create a flat structure for easier file handling
+        mkdir -p release-files
+        find . -name "johansen-null-eigenspectra" -type f -exec cp {} release-files/ \;
+        
+        # Rename files to include platform info
+        if [ -f "johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra" ]; then
+          cp "johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra" "release-files/johansen-null-eigenspectra-linux-x86_64"
+        fi
+        if [ -f "johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra" ]; then
+          cp "johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra" "release-files/johansen-null-eigenspectra-macos-x86_64"
+        fi
+        if [ -f "johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra" ]; then
+          cp "johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra" "release-files/johansen-null-eigenspectra-macos-arm64"
+        fi
+        
+        echo "Release files prepared:"
+        ls -la release-files/
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra
-          johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra
-          johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra
+        files: release-files/*
         draft: true
         prerelease: false
         name: "Release ${{ github.ref_name }}"
