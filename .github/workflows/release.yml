@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: johansen-null-eigenspectra
+            asset_name: johansen-null-eigenspectra-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: johansen-null-eigenspectra.exe
+            asset_name: johansen-null-eigenspectra-windows-x86_64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary_name: johansen-null-eigenspectra
+            asset_name: johansen-null-eigenspectra-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: johansen-null-eigenspectra
+            asset_name: johansen-null-eigenspectra-macos-arm64
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    
+    - name: Install LAPACK (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y liblapack-dev libopenblas-dev gfortran
+    
+    - name: Install LAPACK (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install openblas lapack
+    
+    - name: Setup MSYS2 (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openblas
+          mingw-w64-x86_64-lapack
+    
+    - name: Build
+      run: cargo build --release --target ${{ matrix.target }}
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}
+        path: target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra
+          johansen-null-eigenspectra-windows-x86_64.exe/johansen-null-eigenspectra.exe
+          johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra
+          johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra
+        draft: true
+        prerelease: false
+        name: "Release ${{ github.ref_name }}"
+        body: |
+          ## What's New in ${{ github.ref_name }}
+          
+          This is the **initial public release** of Johansen Null Eigenspectra.
+          
+          ### ✨ Features
+          
+          - High-performance Monte Carlo simulation for Johansen cointegration test eigenvalues
+          - Support for all 5 Johansen model types (0-4)
+          - Multi-threaded parallel computation using Rust and LAPACK
+          - Configurable simulation parameters (dimensions, steps, runs)
+          - Cross-platform binaries for Linux, Windows, and macOS
+          - Data export to `.dat` files for further analysis
+          - Command-line interface with comprehensive options
+          
+          ### 📦 Installation
+          
+          Download the appropriate binary for your platform from the assets below.
+          
+          ### 📋 Usage & Documentation
+          
+          See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for detailed usage instructions, examples, and documentation.
+          
+          ### 🔧 Requirements
+          
+          - No additional dependencies required for the pre-compiled binaries
+          - For building from source: Rust, C compiler, and LAPACK
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
