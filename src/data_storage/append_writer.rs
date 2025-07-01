@@ -20,6 +20,14 @@ use super::config::{
 const MAGIC_HEADER: &[u8] = b"EIGENVALS_V2"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
 
+/// 計算預期檔案大小以便預先配置磁碟空間
+pub fn calculate_expected_file_size(num_runs: usize, eigenvalues_per_run: usize) -> u64 {
+    let header = MAGIC_HEADER.len() as u64;
+    let record_size = 8 + 4 + eigenvalues_per_run as u64 * 8;
+    let metadata = EOF_MARKER.len() as u64 + 8 + 4;
+    header + record_size * num_runs as u64 + metadata
+}
+
 /// 根據檔案大小計算最佳讀取緩衝區大小
 fn calculate_read_buffer_size(file_size: u64) -> usize {
     // 根據檔案大小調整緩衝區：
@@ -51,7 +59,17 @@ pub struct AppendOnlyWriter {
 
 impl AppendOnlyWriter {
     /// 創建新的追加寫入器
+    #[allow(dead_code)]
     pub fn new<P: AsRef<Path>>(path: P, quiet: bool) -> std::io::Result<Self> {
+        Self::with_expected_size(path, None, quiet)
+    }
+
+    /// 創建新的追加寫入器，並可選擇預先配置檔案大小
+    pub fn with_expected_size<P: AsRef<Path>>(
+        path: P,
+        expected_size: Option<u64>,
+        quiet: bool,
+    ) -> std::io::Result<Self> {
         let path_ref = path.as_ref();
         let is_new_file = !path_ref.exists();
 
@@ -60,7 +78,15 @@ impl AppendOnlyWriter {
 
         if is_new_file {
             // 新檔案：直接創建並寫入魔術標頭
-            let file = OpenOptions::new().create(true).write(true).open(path_ref)?;
+            let file = OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path_ref)?;
+
+            if let Some(size) = expected_size {
+                file.set_len(size)?;
+            }
 
             let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
             writer.write_all(MAGIC_HEADER)?;
@@ -385,10 +411,21 @@ pub fn spawn_append_writer_thread(
     receiver: mpsc::Receiver<(u64, Vec<f64>)>,
     total_runs: usize,
     completed_runs: usize,
+    dim: usize,
+    model: crate::johansen_models::JohansenModel,
     quiet: bool,
 ) -> thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
     thread::spawn(move || {
-        let mut writer = AppendOnlyWriter::new(&filename, quiet)?;
+        let eigenvalues_per_run = match model {
+            crate::johansen_models::JohansenModel::InterceptNoTrendWithInterceptInCoint
+            | crate::johansen_models::JohansenModel::InterceptTrendWithTrendInCoint => dim + 1,
+            _ => dim,
+        };
+
+        let expected_size = calculate_expected_file_size(total_runs, eigenvalues_per_run);
+
+        let mut writer =
+            AppendOnlyWriter::with_expected_size(&filename, Some(expected_size), quiet)?;
         let mut count = 0;
         let start_time = std::time::Instant::now();
 

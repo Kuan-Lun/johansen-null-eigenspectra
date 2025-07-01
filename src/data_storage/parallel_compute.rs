@@ -172,6 +172,8 @@ fn run_single_model_simulation(
                 receiver,
                 num_runs,
                 completed_runs,
+                dim,
+                model,
                 quiet,
             );
             let statistics_handle = spawn_statistics_collector(statistics_receiver);
