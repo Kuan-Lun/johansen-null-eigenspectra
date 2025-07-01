@@ -70,6 +70,15 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
     
+    - name: Debug artifact structure
+      run: |
+        echo "Current directory contents:"
+        ls -la
+        echo "Looking for binary files:"
+        find . -name "johansen-null-eigenspectra" -type f
+        echo "All files in current directory:"
+        find . -type f
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
