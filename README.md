@@ -30,6 +30,24 @@ This example runs the simulation for dimension 5 with 5,000 steps and 1,000,000 
 
 **Note**: Numeric arguments support comma separators for better readability (e.g., `--runs 1,000,000` or `--runs 1000000`).
 
+### Model Numbers
+
+The `--model` parameter accepts comma-separated model numbers (0-4). Each number corresponds to a specific Johansen cointegration test model:
+
+| Model | Description |
+|-------|-------------|
+| 0 | No intercept, no trend |
+| 1 | Intercept, no trend, intercept in cointegration |
+| 2 | Intercept, no trend, intercept not fully explained by cointegration |
+| 3 | Intercept, trend, trend in cointegration |
+| 4 | Intercept, trend, intercept and trend not fully explained by cointegration |
+
+**Examples:**
+
+- `--model 0,2` runs only models 0 and 2
+- `--model 1` runs only model 1
+- If not specified, all models (0,1,2,3,4) are computed by default
+
 The simulation writes results to `data/eigenvalues_modelX_dimY_stepsZ_N.dat` where `X` is the model number, `Y` is the dimension, `Z` is the number of steps, and `N` is the number of runs.
 
 ## Reading existing results
