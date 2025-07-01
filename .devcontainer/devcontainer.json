@@ -1,13 +1,15 @@
 {
     "name": "Rust + LAPACK Dev Container",
     "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "Dockerfile",
+        "context": ".."
     },
     "settings": {
         "terminal.integrated.shell.linux": "/bin/bash"
     },
     "extensions": [
         "rust-lang.rust-analyzer",
-        "github.copilot"
+        "github.copilot",
+        "ms-azuretools.vscode-docker"
     ]
 }
