@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 
-use super::config::{FLUSH_INTERVAL, PROGRESS_REPORT_INTERVAL};
+use super::config::{FLUSH_INTERVAL, PROGRESS_REPORT_INTERVAL, WRITE_BUFFER_CAPACITY};
 
 /// 格式化剩餘時間顯示
 /// 檔案格式常數
@@ -39,7 +39,7 @@ impl AppendOnlyWriter {
             // 新檔案：直接創建並寫入魔術標頭
             let file = OpenOptions::new().create(true).write(true).open(path_ref)?;
 
-            let mut writer = BufWriter::new(file);
+            let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
             writer.write_all(MAGIC_HEADER)?;
             writer.flush()?;
 
@@ -85,7 +85,7 @@ impl AppendOnlyWriter {
             // 設置為追加模式
             let file = OpenOptions::new().append(true).open(path_ref)?;
 
-            let writer = BufWriter::new(file);
+            let writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
 
             Ok(Self {
                 writer,
