@@ -49,14 +49,14 @@ fn calculate_eigenvalues_parallel(
             // 發送結果給寫入執行緒
             if let Err(_) = sender.send((seed, eigenvalues)) {
                 if !quiet {
-                    eprintln!("發送結果到寫入執行緒失敗");
+                    eprintln!("Failed to send results to writer thread");
                 }
             }
 
             // 發送統計資料
             if let Err(_) = statistics_sender.send(eigenvalue_sum) {
                 if !quiet {
-                    eprintln!("發送統計資料失敗");
+                    eprintln!("Failed to send statistics data");
                 }
             }
         });
@@ -68,23 +68,23 @@ fn validate_output_file(filename: &str, expected_count: usize) {
     match read_append_file(filename) {
         Ok(loaded_data) => {
             if loaded_data.len() == expected_count {
-                println!("SUCCESS: 追加檔案驗證成功");
+                println!("SUCCESS: append file validation successful");
             } else {
                 println!(
-                    "ERROR: 追加檔案驗證失敗：數據長度不匹配 (期待: {}, 實際: {})",
+                    "ERROR: append file validation failed: data length mismatch (expected: {}, actual: {})",
                     expected_count,
                     loaded_data.len()
                 );
             }
         }
-        Err(e) => println!("ERROR: 讀取追加檔案失敗: {}", e),
+        Err(e) => println!("ERROR: failed to read append file: {}", e),
     }
 }
 
 /// 輸出百分位數統計資訊
 fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) {
     println!(
-        "總共計算了 {} 個特徵值總和",
+        "Total calculated {} eigenvalue sums",
         format_number_with_commas(sorted_eigenvalues.len())
     );
 
@@ -92,7 +92,7 @@ fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) 
     for &percentile in percentiles {
         let index = ((sorted_eigenvalues.len() as f64) * percentile) as usize;
         let value = sorted_eigenvalues[index.min(sorted_eigenvalues.len() - 1)];
-        println!("第{:.0}百分位的值: {:.6}", percentile * 100.0, value);
+        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
     }
 }
 
@@ -118,7 +118,7 @@ fn run_single_model_simulation(
     quiet: bool,
 ) {
     if !quiet {
-        println!("使用模型: {} (支援斷點續傳)", model);
+        println!("Using model: {} (supports resuming from checkpoint)", model);
     }
 
     let filename = get_filename_fn(model);
@@ -128,7 +128,7 @@ fn run_single_model_simulation(
         Ok((completed_runs, completed_seeds)) => {
             if completed_runs >= num_runs {
                 if !quiet {
-                    println!("SUCCESS: 此模型的計算已完成，跳過");
+                    println!("SUCCESS: calculation for this model already completed, skipping");
                 }
                 return;
             }
@@ -138,7 +138,7 @@ fn run_single_model_simulation(
                 let min_completed_seed = completed_seeds.iter().min().copied().unwrap_or(0);
                 if !quiet {
                     println!(
-                        "檢測到已完成 {}/{} 次計算，Seeds 範圍: {}-{}",
+                        "Detected {} completed out of {} calculations, Seeds range: {}-{}",
                         completed_runs, num_runs, min_completed_seed, max_completed_seed
                     );
                 }
@@ -150,14 +150,14 @@ fn run_single_model_simulation(
 
             if remaining_count == 0 {
                 if !quiet {
-                    println!("SUCCESS: 此模型的計算已完成");
+                    println!("SUCCESS: calculation for this model already completed");
                 }
                 return;
             }
 
             if !quiet {
                 println!(
-                    "剩餘 {} 次計算需要完成",
+                    "Remaining {} calculations to complete",
                     format_number_with_commas(remaining_count)
                 );
             }
@@ -191,17 +191,17 @@ fn run_single_model_simulation(
             match writer_handle.join() {
                 Ok(Ok(())) => {
                     if !quiet {
-                        println!("已儲存到 {}", filename);
+                        println!("Saved to {}", filename);
                     }
                 }
                 Ok(Err(e)) => {
                     if !quiet {
-                        eprintln!("寫入執行緒出錯: {}", e);
+                        eprintln!("Writer thread error: {}", e);
                     }
                 }
                 Err(_) => {
                     if !quiet {
-                        eprintln!("寫入執行緒 panic");
+                        eprintln!("Writer thread panic");
                     }
                 }
             }
@@ -217,7 +217,7 @@ fn run_single_model_simulation(
                 }
                 Err(_) => {
                     if !quiet {
-                        eprintln!("統計執行緒 panic");
+                        eprintln!("Statistics thread panic");
                     }
                 }
             }
@@ -229,7 +229,7 @@ fn run_single_model_simulation(
         }
         Err(e) => {
             if !quiet {
-                eprintln!("檢查進度失敗: {}", e);
+                eprintln!("Failed to check progress: {}", e);
             }
         }
     }
@@ -249,15 +249,15 @@ pub fn run_large_scale_simulation(
     quiet: bool,
 ) {
     if !quiet {
-        println!("開始大規模模擬 - 支援斷點續傳");
+        println!("Starting large-scale simulation - supports resuming from checkpoint");
         println!(
-            "維度: {}, 步數: {}, 運行次數: {}",
+            "Dimensions: {}, Steps: {}, Runs: {}",
             dim,
             format_number_with_commas(steps),
             format_number_with_commas(num_runs)
         );
         println!(
-            "支援的模型: {}",
+            "Supported models: {}",
             JohansenModel::all_models()
                 .iter()
                 .map(|m| format!("{}", m))
