@@ -60,14 +60,20 @@ jobs:
           mingw-w64-x86_64-lapack
           mingw-w64-x86_64-pkg-config
     
+    - name: Debug library files (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: |
+        find /mingw64/lib -name "*openblas*" -o -name "*lapack*" -o -name "*blas*"
+        pkg-config --cflags --libs openblas || echo "openblas pkg-config failed"
+        pkg-config --cflags --libs lapack || echo "lapack pkg-config failed"
+    
     - name: Set MSYS2 environment for Rust (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
-        echo "C:\msys64\usr\bin" >> $env:GITHUB_PATH
         echo "PKG_CONFIG_PATH=C:\msys64\mingw64\lib\pkgconfig" >> $env:GITHUB_ENV
         echo "LIBRARY_PATH=C:\msys64\mingw64\lib" >> $env:GITHUB_ENV
-        echo "C_INCLUDE_PATH=C:\msys64\mingw64\include" >> $env:GITHUB_ENV
     
     - name: Build (Windows)
       if: matrix.os == 'windows-latest'
