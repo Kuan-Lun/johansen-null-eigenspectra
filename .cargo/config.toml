@@ -15,3 +15,7 @@ rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Accelerate"]
 # Windows MSVC: link to LAPACK .lib in custom path
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-L.", "-lopenblas"]
+
+# Windows GNU: use MSYS2/MinGW LAPACK
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-lopenblas", "-llapack"]
