@@ -36,6 +36,7 @@ The binary accepts several options. The following list mirrors the help output f
 --model <list>       comma separated list of model numbers to compute (default: 0,1,2,3,4)
 --quiet              suppress progress output
 -h, --help           show this help message
+-v, --version        show version information
 ```
 
 ## Usage Examples
