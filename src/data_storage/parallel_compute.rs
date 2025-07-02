@@ -151,7 +151,10 @@ fn run_single_model_simulation(
                 if !quiet {
                     println!(
                         "Detected {} completed out of {} calculations, Seeds range: {}-{}",
-                        completed_runs, num_runs, min_completed_seed, max_completed_seed
+                        format_number_with_commas(completed_runs),
+                        format_number_with_commas(num_runs),
+                        format_number_with_commas(min_completed_seed as usize),
+                        format_number_with_commas(max_completed_seed as usize)
                     );
                 }
             }
