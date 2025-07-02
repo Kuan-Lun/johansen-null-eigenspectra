@@ -77,7 +77,19 @@ fn validate_output_file(filename: &str, expected_count: usize) {
                 );
             }
         }
-        Err(e) => println!("ERROR: failed to read append file: {}", e),
+        Err(e) => {
+            // 對於魔術標頭不匹配這類嚴重的文件格式錯誤，應該 panic
+            if e.to_string()
+                .contains("File format error: magic header mismatch")
+            {
+                panic!(
+                    "CRITICAL ERROR: File format incompatibility detected - {}",
+                    e
+                );
+            } else {
+                println!("ERROR: failed to read append file: {}", e);
+            }
+        }
     }
 }
 

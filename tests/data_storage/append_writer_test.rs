@@ -130,3 +130,55 @@ fn test_append_writer_eigenvalue_consistency() {
     // 清理
     let _ = std::fs::remove_file(filename);
 }
+
+#[test]
+fn test_eigenvalue_count_overflow_protection() {
+    let filename = "test_overflow.dat";
+    let _ = std::fs::remove_file(filename);
+
+    // 嘗試寫入超過 u8::MAX 的特徵值數量
+    let large_eigenvalues: Vec<f64> = (0..300).map(|i| i as f64).collect(); // 300 > 255
+
+    // 這應該失敗
+    let mut writer = AppendOnlyWriter::new(filename, true).unwrap();
+    let result = writer.append_eigenvalues(1, &large_eigenvalues);
+
+    match result {
+        Err(e) => {
+            assert!(e.to_string().contains("Too many eigenvalues"));
+            assert!(e.to_string().contains("exceeds maximum of 255"));
+        }
+        Ok(_) => panic!("Should have failed with too many eigenvalues"),
+    }
+
+    // 清理
+    let _ = std::fs::remove_file(filename);
+}
+
+#[test]
+fn test_valid_eigenvalue_count_boundary() {
+    let filename = "test_boundary.dat";
+    let _ = std::fs::remove_file(filename);
+
+    // 創建 exactly 255 個特徵值
+    let boundary_eigenvalues: Vec<f64> = (0..255).map(|i| i as f64).collect();
+
+    // 這應該成功
+    {
+        let mut writer = AppendOnlyWriter::new(filename, true).unwrap();
+        let result = writer.append_eigenvalues(1, &boundary_eigenvalues);
+        assert!(
+            result.is_ok(),
+            "Should succeed with exactly 255 eigenvalues"
+        );
+        writer.finish().unwrap();
+    }
+
+    // 驗證可以讀取
+    let data = read_append_file(filename).unwrap();
+    assert_eq!(data.len(), 1);
+    assert_eq!(data[0].1.len(), 255);
+
+    // 清理
+    let _ = std::fs::remove_file(filename);
+}

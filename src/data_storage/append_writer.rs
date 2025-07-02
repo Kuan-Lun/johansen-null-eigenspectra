@@ -17,14 +17,14 @@ use super::config::{
 };
 
 /// 檔案格式常數
-const MAGIC_HEADER: &[u8] = b"EIGENVALS_V2"; // 12 bytes
+const MAGIC_HEADER: &[u8] = b"EIGENVALS_V3"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
 
 /// 計算預期檔案大小以便預先配置磁碟空間
 pub fn calculate_expected_file_size(num_runs: usize, eigenvalues_per_run: usize) -> u64 {
     let header = MAGIC_HEADER.len() as u64;
-    let record_size = 8 + 4 + eigenvalues_per_run as u64 * 8;
-    let metadata = EOF_MARKER.len() as u64 + 8 + 4;
+    let record_size = 8 + 1 + eigenvalues_per_run as u64 * 8; // seed: 8 bytes, count: 1 byte (u8)
+    let metadata = EOF_MARKER.len() as u64 + 8 + 1; // eof_marker + total_count + eigenvalues_per_run(u8)
     header + record_size * num_runs as u64 + metadata
 }
 
@@ -106,16 +106,54 @@ impl AppendOnlyWriter {
         } else {
             // 既有檔案：檢查數據並移除 EOF 標記
             // 先讀取檔案內容來獲取計數 (保持原始容錯邏輯)
-            if let Ok(existing_data) = read_append_file(&path) {
-                written_count = existing_data.len();
-                if let Some((_, eigenvalues)) = existing_data.first() {
-                    eigenvalues_per_run = Some(eigenvalues.len());
+            match read_append_file(&path) {
+                Ok(existing_data) => {
+                    written_count = existing_data.len();
+                    if let Some((_, eigenvalues)) = existing_data.first() {
+                        eigenvalues_per_run = Some(eigenvalues.len());
+                    }
+                    if !quiet {
+                        println!(
+                            "Detected existing file with {} data records",
+                            format_number_with_commas(written_count)
+                        );
+                    }
                 }
-                if !quiet {
-                    println!(
-                        "Detected existing file with {} data records",
-                        format_number_with_commas(written_count)
-                    );
+                Err(e)
+                    if e.to_string()
+                        .contains("File format error: magic header mismatch") =>
+                {
+                    // 文件格式不兼容，刪除舊文件並重新創建
+                    if !quiet {
+                        println!("WARNING: Incompatible file format detected, recreating file...");
+                    }
+                    std::fs::remove_file(&path)?;
+
+                    // 重新創建新文件
+                    let file = OpenOptions::new()
+                        .create(true)
+                        .read(true)
+                        .write(true)
+                        .open(path_ref)?;
+
+                    let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
+                    writer.write_all(MAGIC_HEADER)?;
+                    writer.flush()?;
+
+                    return Ok(Self {
+                        writer,
+                        written_count: 0,
+                        eigenvalues_per_run: None,
+                        quiet,
+                    });
+                }
+                Err(_) => {
+                    // 其他讀取錯誤，採用容錯策略
+                    if !quiet {
+                        println!(
+                            "WARNING: Could not read existing file, will attempt to append..."
+                        );
+                    }
                 }
             }
 
@@ -124,12 +162,13 @@ impl AppendOnlyWriter {
             let file_len = file.metadata()?.len();
 
             // 檢查檔案結尾是否真的包含 EOF 標記
-            if file_len >= 12 + 20 {
-                file.seek(SeekFrom::End(-20))?;
+            if file_len >= 12 + 17 {
+                // magic(12) + eof_marker(8) + count(8) + eigenvalues_per_run(1) = 29
+                file.seek(SeekFrom::End(-17))?; // eof_marker(8) + count(8) + eigenvalues_per_run(1) = 17
                 let mut eof_buf = [0u8; 8];
                 if let Ok(()) = file.read_exact(&mut eof_buf) {
                     if &eof_buf == EOF_MARKER {
-                        let new_len = file_len - 20;
+                        let new_len = file_len - 17;
                         file.set_len(new_len)?;
                         if !quiet {
                             println!("Removed EOF marker to enable append mode");
@@ -154,6 +193,18 @@ impl AppendOnlyWriter {
 
     /// 追加特徵值數據
     pub fn append_eigenvalues(&mut self, seed: u64, eigenvalues: &[f64]) -> std::io::Result<()> {
+        // 檢查特徵值數量是否在 u8 範圍內
+        if eigenvalues.len() > u8::MAX as usize {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Too many eigenvalues: {} exceeds maximum of {}",
+                    format_number_with_commas(eigenvalues.len()),
+                    u8::MAX
+                ),
+            ));
+        }
+
         // 如果是第一次寫入，記錄特徵值的數量
         if self.eigenvalues_per_run.is_none() {
             self.eigenvalues_per_run = Some(eigenvalues.len());
@@ -173,10 +224,10 @@ impl AppendOnlyWriter {
             }
         }
 
-        // 寫入數據塊：[seed: 8 bytes] [eigenvalue_count: 4 bytes] [eigenvalues: count * 8 bytes]
+        // 寫入數據塊：[seed: 8 bytes] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
         self.writer.write_all(&seed.to_le_bytes())?;
         self.writer
-            .write_all(&(eigenvalues.len() as u32).to_le_bytes())?;
+            .write_all(&(eigenvalues.len() as u8).to_le_bytes())?;
 
         for &val in eigenvalues {
             self.writer.write_all(&val.to_le_bytes())?;
@@ -203,10 +254,21 @@ impl AppendOnlyWriter {
             .write_all(&(self.written_count as u64).to_le_bytes())?;
 
         if let Some(eigenvalues_per_run) = self.eigenvalues_per_run {
+            // 檢查 eigenvalues_per_run 是否在 u8 範圍內
+            if eigenvalues_per_run > u8::MAX as usize {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Too many eigenvalues per run: {} exceeds maximum of {}",
+                        format_number_with_commas(eigenvalues_per_run),
+                        u8::MAX
+                    ),
+                ));
+            }
             self.writer
-                .write_all(&(eigenvalues_per_run as u32).to_le_bytes())?;
+                .write_all(&(eigenvalues_per_run as u8).to_le_bytes())?;
         } else {
-            self.writer.write_all(&0u32.to_le_bytes())?;
+            self.writer.write_all(&0u8.to_le_bytes())?;
         }
 
         self.writer.flush()?;
@@ -243,8 +305,8 @@ pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u64, Ve
 
     // 嘗試從檔案末尾讀取元數據
     let file_len = reader.get_ref().metadata()?.len();
-    if file_len < 12 + 8 + 8 + 4 {
-        // magic + eof_marker + count + eigenvalues_per_run
+    if file_len < 12 + 8 + 8 + 1 {
+        // magic + eof_marker + count + eigenvalues_per_run(u8)
         return Ok(Vec::new()); // 檔案太小，可能是空檔案
     }
 
@@ -266,7 +328,7 @@ fn read_file_metadata(
     file_len: u64,
 ) -> std::io::Result<Option<(usize, usize)>> {
     // 定位到檔案末尾的元數據位置
-    let metadata_offset = file_len - 8 - 4; // count + eigenvalues_per_run
+    let metadata_offset = file_len - 8 - 1; // count + eigenvalues_per_run(u8)
     reader.seek(SeekFrom::Start(metadata_offset - 8))?; // 包括 EOF_MARKER
 
     // 檢查 EOF 標記
@@ -278,13 +340,13 @@ fn read_file_metadata(
 
     // 讀取總數和特徵值數量
     let mut count_buf = [0u8; 8];
-    let mut eigenvalues_buf = [0u8; 4];
+    let mut eigenvalues_buf = [0u8; 1]; // 改為 1 byte
 
     reader.read_exact(&mut count_buf)?;
     reader.read_exact(&mut eigenvalues_buf)?;
 
     let total_count = u64::from_le_bytes(count_buf) as usize;
-    let eigenvalues_per_run = u32::from_le_bytes(eigenvalues_buf) as usize;
+    let eigenvalues_per_run = u8::from_le_bytes(eigenvalues_buf) as usize;
 
     Ok(Some((total_count, eigenvalues_per_run)))
 }
@@ -302,13 +364,22 @@ fn read_with_metadata(
 
     for _ in 0..total_count {
         let mut seed_buf = [0u8; 8];
-        let mut count_buf = [0u8; 4];
+        let mut count_buf = [0u8; 1]; // 改為 1 byte
 
         reader.read_exact(&mut seed_buf)?;
         reader.read_exact(&mut count_buf)?;
 
         let seed = u64::from_le_bytes(seed_buf);
-        let eigenvalue_count = u32::from_le_bytes(count_buf) as usize;
+        let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
+        let eigenvalue_count = eigenvalue_count_u8 as usize;
+
+        // 驗證 eigenvalue_count 在合理範圍內（雖然 u8 已經限制了範圍）
+        if eigenvalue_count == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid eigenvalue count: cannot be zero",
+            ));
+        }
 
         if eigenvalue_count != eigenvalues_per_run {
             return Err(std::io::Error::new(
@@ -343,7 +414,7 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
 
     loop {
         let mut seed_buf = [0u8; 8];
-        let mut count_buf = [0u8; 4];
+        let mut count_buf = [0u8; 1]; // 改為 1 byte
 
         // 嘗試讀取 seed
         if reader.read_exact(&mut seed_buf).is_err() {
@@ -358,11 +429,11 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
         // 檢查是否是全零（預分配的空白區域）
         if seed_buf == [0u8; 8] {
             // 檢查後續是否也是零，如果是則認為到達了預分配的空白區域
-            if reader.read_exact(&mut count_buf).is_ok() && count_buf == [0u8; 4] {
+            if reader.read_exact(&mut count_buf).is_ok() && count_buf == [0u8; 1] {
                 break; // 遇到預分配的空白區域
             } else {
                 // 如果不是全零的 count，則繼續處理（seed 為 0 是有效的）
-                reader.seek(SeekFrom::Current(-4))?; // 回退 count_buf
+                reader.seek(SeekFrom::Current(-1))?; // 回退 count_buf (1 byte)
             }
         }
 
@@ -372,11 +443,12 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
         }
 
         let seed = u64::from_le_bytes(seed_buf);
-        let eigenvalue_count = u32::from_le_bytes(count_buf) as usize;
+        let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
+        let eigenvalue_count = eigenvalue_count_u8 as usize;
 
-        // 檢查特徵值數量是否合理（避免讀取損壞的數據）
-        if eigenvalue_count == 0 || eigenvalue_count > 255 {
-            break; // 不合理的特徵值數量，可能是預分配的空白區域
+        // 檢查特徵值數量是否合理（u8 已經限制在 0-255 範圍內）
+        if eigenvalue_count == 0 {
+            break; // 零計數表示可能到達了預分配的空白區域
         }
 
         // 讀取特徵值
