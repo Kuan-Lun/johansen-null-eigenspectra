@@ -17,12 +17,12 @@ use super::config::{
 };
 
 /// 檔案格式常數
-const MAGIC_HEADER: &[u8] = b"EIGENVALS_V4"; // 12 bytes
+const MAGIC_HEADER: &[u8] = b"EIGENVALS_V5"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
 
 /// 計算預期檔案大小以便預先配置磁碟空間
 pub fn calculate_expected_file_size(num_runs: usize, eigenvalues_per_run: usize) -> u64 {
-    let header = MAGIC_HEADER.len() as u64;
+    let header = MAGIC_HEADER.len() as u64 + 1 + 1 + 4; // magic + model(1) + dim(1) + steps(4)
     let record_size = 4 + 1 + eigenvalues_per_run as u64 * 8; // seed: 4 bytes (u32), count: 1 byte (u8)
     let metadata = EOF_MARKER.len() as u64 + 8 + 1; // eof_marker + total_count + eigenvalues_per_run(u8)
     header + record_size * num_runs as u64 + metadata
@@ -54,20 +54,20 @@ pub struct AppendOnlyWriter {
     writer: BufWriter<File>,
     written_count: usize,
     eigenvalues_per_run: Option<usize>,
+    model: u8,
+    dim: u8,
+    steps: u32,
     quiet: bool,
 }
 
 impl AppendOnlyWriter {
-    /// 創建新的追加寫入器
-    #[allow(dead_code)]
-    pub fn new<P: AsRef<Path>>(path: P, quiet: bool) -> std::io::Result<Self> {
-        Self::with_expected_size(path, None, quiet)
-    }
-
     /// 創建新的追加寫入器，並可選擇預先配置檔案大小
     pub fn with_expected_size<P: AsRef<Path>>(
         path: P,
         expected_size: Option<u64>,
+        model: u8,
+        dim: u8,
+        steps: u32,
         quiet: bool,
     ) -> std::io::Result<Self> {
         let path_ref = path.as_ref();
@@ -77,7 +77,7 @@ impl AppendOnlyWriter {
         let mut eigenvalues_per_run = None;
 
         if is_new_file {
-            // 新檔案：直接創建並寫入魔術標頭
+            // 新檔案：直接創建並寫入魔術標頭和元數據
             let file = OpenOptions::new()
                 .create(true)
                 .read(true)
@@ -95,19 +95,54 @@ impl AppendOnlyWriter {
 
             let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
             writer.write_all(MAGIC_HEADER)?;
+            writer.write_all(&model.to_le_bytes())?;
+            writer.write_all(&dim.to_le_bytes())?;
+            writer.write_all(&steps.to_le_bytes())?;
             writer.flush()?;
 
             Ok(Self {
                 writer,
                 written_count: 0,
                 eigenvalues_per_run: None,
+                model,
+                dim,
+                steps,
                 quiet,
             })
         } else {
             // 既有檔案：檢查數據並移除 EOF 標記
             // 先讀取檔案內容來獲取計數 (保持原始容錯邏輯)
             match read_append_file(&path) {
-                Ok(existing_data) => {
+                Ok((existing_data, file_model, file_dim, file_steps)) => {
+                    // 驗證參數是否匹配
+                    if file_model != model {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!(
+                                "Model mismatch: file has model {}, expected {}",
+                                file_model, model
+                            ),
+                        ));
+                    }
+                    if file_dim != dim {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!(
+                                "Dimension mismatch: file has dim {}, expected {}",
+                                file_dim, dim
+                            ),
+                        ));
+                    }
+                    if file_steps != steps {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!(
+                                "Steps mismatch: file has steps {}, expected {}",
+                                file_steps, steps
+                            ),
+                        ));
+                    }
+
                     written_count = existing_data.len();
                     if let Some((_, eigenvalues)) = existing_data.first() {
                         eigenvalues_per_run = Some(eigenvalues.len());
@@ -138,12 +173,18 @@ impl AppendOnlyWriter {
 
                     let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
                     writer.write_all(MAGIC_HEADER)?;
+                    writer.write_all(&model.to_le_bytes())?;
+                    writer.write_all(&dim.to_le_bytes())?;
+                    writer.write_all(&steps.to_le_bytes())?;
                     writer.flush()?;
 
                     return Ok(Self {
                         writer,
                         written_count: 0,
                         eigenvalues_per_run: None,
+                        model,
+                        dim,
+                        steps,
                         quiet,
                     });
                 }
@@ -162,8 +203,8 @@ impl AppendOnlyWriter {
             let file_len = file.metadata()?.len();
 
             // 檢查檔案結尾是否真的包含 EOF 標記
-            if file_len >= 12 + 17 {
-                // magic(12) + eof_marker(8) + count(8) + eigenvalues_per_run(1) = 29
+            if file_len >= 18 + 17 {
+                // magic(12) + model(1) + dim(1) + steps(4) + eof_marker(8) + count(8) + eigenvalues_per_run(1) = 35
                 file.seek(SeekFrom::End(-17))?; // eof_marker(8) + count(8) + eigenvalues_per_run(1) = 17
                 let mut eof_buf = [0u8; 8];
                 if let Ok(()) = file.read_exact(&mut eof_buf) {
@@ -186,6 +227,9 @@ impl AppendOnlyWriter {
                 writer,
                 written_count,
                 eigenvalues_per_run,
+                model,
+                dim,
+                steps,
                 quiet,
             })
         }
@@ -216,9 +260,12 @@ impl AppendOnlyWriter {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "Eigenvalue count mismatch: expected {}, actual {}",
+                        "Eigenvalue count mismatch: expected {}, actual {} (model {}, dim {}, steps {})",
                         format_number_with_commas(expected_len),
-                        format_number_with_commas(eigenvalues.len())
+                        format_number_with_commas(eigenvalues.len()),
+                        self.model,
+                        self.dim,
+                        self.steps
                     ),
                 ));
             }
@@ -275,8 +322,11 @@ impl AppendOnlyWriter {
 
         if !self.quiet {
             println!(
-                "SUCCESS: append write completed, wrote {} data records",
-                format_number_with_commas(self.written_count)
+                "SUCCESS: append write completed, wrote {} data records for model {}, dim {}, steps {}",
+                format_number_with_commas(self.written_count),
+                self.model,
+                self.dim,
+                self.steps
             );
         }
 
@@ -285,7 +335,9 @@ impl AppendOnlyWriter {
 }
 
 /// 讀取追加格式的檔案
-pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
+pub fn read_append_file<P: AsRef<Path>>(
+    path: P,
+) -> std::io::Result<(Vec<(u32, Vec<f64>)>, u8, u8, u32)> {
     let file = File::open(&path)?;
     let file_size = file.metadata()?.len();
 
@@ -303,23 +355,38 @@ pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u32, Ve
         ));
     }
 
+    // 讀取檔案參數
+    let mut model_buf = [0u8; 1];
+    let mut dim_buf = [0u8; 1];
+    let mut steps_buf = [0u8; 4];
+
+    reader.read_exact(&mut model_buf)?;
+    reader.read_exact(&mut dim_buf)?;
+    reader.read_exact(&mut steps_buf)?;
+
+    let model = u8::from_le_bytes(model_buf);
+    let dim = u8::from_le_bytes(dim_buf);
+    let steps = u32::from_le_bytes(steps_buf);
+
     // 嘗試從檔案末尾讀取元數據
     let file_len = reader.get_ref().metadata()?.len();
-    if file_len < 12 + 8 + 8 + 1 {
-        // magic + eof_marker + count + eigenvalues_per_run(u8)
-        return Ok(Vec::new()); // 檔案太小，可能是空檔案
+    if file_len < 18 + 8 + 8 + 1 {
+        // magic(12) + model(1) + dim(1) + steps(4) + eof_marker(8) + count(8) + eigenvalues_per_run(1)
+        return Ok((Vec::new(), model, dim, steps)); // 檔案太小，可能是空檔案
     }
 
     // 檢查是否有完整的結束標記
     let metadata = read_file_metadata(&mut reader, file_len)?;
 
-    if let Some((total_count, eigenvalues_per_run)) = metadata {
+    let data = if let Some((total_count, eigenvalues_per_run)) = metadata {
         // 有完整的結束標記，使用快速讀取
-        read_with_metadata(&mut reader, total_count, eigenvalues_per_run)
+        read_with_metadata(&mut reader, total_count, eigenvalues_per_run)?
     } else {
         // 沒有結束標記，掃描式讀取（用於未完成的檔案）
-        scan_read_data(&mut reader)
-    }
+        scan_read_data(&mut reader)?
+    };
+
+    Ok((data, model, dim, steps))
 }
 
 /// 嘗試從檔案末尾讀取元數據
@@ -358,7 +425,7 @@ fn read_with_metadata(
     eigenvalues_per_run: usize,
 ) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
     // 回到數據開始位置
-    reader.seek(SeekFrom::Start(12))?; // 跳過魔術標頭
+    reader.seek(SeekFrom::Start(18))?; // 跳過魔術標頭(12) + model(1) + dim(1) + steps(4)
 
     let mut data = Vec::with_capacity(total_count);
 
@@ -408,7 +475,7 @@ fn read_with_metadata(
 /// 掃描式讀取（用於沒有結束標記的檔案）
 fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
     // 回到數據開始位置
-    reader.seek(SeekFrom::Start(12))?; // 跳過魔術標頭
+    reader.seek(SeekFrom::Start(18))?; // 跳過魔術標頭(12) + model(1) + dim(1) + steps(4)
 
     let mut data = Vec::new();
 
@@ -484,14 +551,48 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u32, Vec
     Ok(data)
 }
 
-/// 檢查檔案進度（追加格式）
-pub fn check_append_progress<P: AsRef<Path>>(path: P) -> std::io::Result<(usize, Vec<u32>)> {
+/// 檢查檔案進度（追加格式）並驗證參數匹配
+pub fn check_append_progress<P: AsRef<Path>>(
+    path: P,
+    expected_model: u8,
+    expected_dim: u8,
+    expected_steps: u32,
+) -> std::io::Result<(usize, Vec<u32>)> {
     if !path.as_ref().exists() {
         return Ok((0, Vec::new()));
     }
 
     match read_append_file(&path) {
-        Ok(data) => {
+        Ok((data, file_model, file_dim, file_steps)) => {
+            // 驗證參數是否匹配
+            if file_model != expected_model {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Model mismatch: file has model {}, expected {}",
+                        file_model, expected_model
+                    ),
+                ));
+            }
+            if file_dim != expected_dim {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Dimension mismatch: file has dim {}, expected {}",
+                        file_dim, expected_dim
+                    ),
+                ));
+            }
+            if file_steps != expected_steps {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "Steps mismatch: file has steps {}, expected {}",
+                        file_steps, expected_steps
+                    ),
+                ));
+            }
+
             let completed_runs = data.len();
             let completed_seeds: Vec<u32> = data.iter().map(|(seed, _)| *seed).collect();
             Ok((completed_runs, completed_seeds))
@@ -515,6 +616,7 @@ pub fn spawn_append_writer_thread(
     total_runs: usize,
     completed_runs: usize,
     dim: usize,
+    steps: usize,
     model: crate::johansen_models::JohansenModel,
     quiet: bool,
 ) -> thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
@@ -527,8 +629,14 @@ pub fn spawn_append_writer_thread(
 
         let expected_size = calculate_expected_file_size(total_runs, eigenvalues_per_run);
 
-        let mut writer =
-            AppendOnlyWriter::with_expected_size(&filename, Some(expected_size), quiet)?;
+        let mut writer = AppendOnlyWriter::with_expected_size(
+            &filename,
+            Some(expected_size),
+            model.to_number(),
+            dim as u8,
+            steps as u32,
+            quiet,
+        )?;
         let mut count = 0;
         let start_time = std::time::Instant::now();
 

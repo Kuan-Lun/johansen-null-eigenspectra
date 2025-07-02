@@ -4,12 +4,12 @@ use johansen_null_eigenspectra::data_storage::parallel_compute::run_model_simula
 use johansen_null_eigenspectra::johansen_models::JohansenModel;
 
 /// 重寫追加格式檔案的測試輔助函數
-fn rewrite_append_file(filename: &str, data: &[(u32, Vec<f64>)]) -> std::io::Result<()> {
+fn rewrite_append_file(filename: &str, data: &[(u32, Vec<f64>)], model: u8, dim: u8, steps: u32) -> std::io::Result<()> {
     // 刪除舊檔案
     let _ = std::fs::remove_file(filename);
 
     // 使用追加寫入器重建檔案
-    let mut writer = AppendOnlyWriter::new(filename, true)?;
+    let mut writer = AppendOnlyWriter::with_expected_size(filename, None, model, dim, steps, true)?;
 
     for (seed, eigenvalues) in data {
         writer.append_eigenvalues(*seed, eigenvalues)?;
@@ -52,7 +52,7 @@ fn remove_seed_from_file(
         std::fs::copy(&filename, &backup_filename)?;
 
         // 重寫檔案
-        rewrite_append_file(&filename, &filtered_data)?;
+        rewrite_append_file(&filename, &filtered_data, model.to_number(), simulation.dim as u8, simulation.steps as u32)?;
     }
 
     Ok(removed_count)

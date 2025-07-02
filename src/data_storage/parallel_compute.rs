@@ -66,7 +66,7 @@ fn calculate_eigenvalues_parallel(
 /// 驗證檔案寫入結果
 fn validate_output_file(filename: &str, expected_count: usize) {
     match read_append_file(filename) {
-        Ok(loaded_data) => {
+        Ok((loaded_data, _model, _dim, _steps)) => {
             if loaded_data.len() == expected_count {
                 println!("SUCCESS: append file validation successful");
             } else {
@@ -136,7 +136,7 @@ fn run_single_model_simulation(
     let filename = get_filename_fn(model);
 
     // 檢查已完成的進度
-    match check_append_progress(&filename) {
+    match check_append_progress(&filename, model.to_number(), dim as u8, steps as u32) {
         Ok((completed_runs, completed_seeds)) => {
             if completed_runs >= num_runs {
                 if !quiet {
@@ -188,6 +188,7 @@ fn run_single_model_simulation(
                 num_runs,
                 completed_runs,
                 dim,
+                steps,
                 model,
                 quiet,
             );
@@ -241,7 +242,34 @@ fn run_single_model_simulation(
             }
         }
         Err(e) => {
-            panic!("Failed to check progress: {}", e);
+            // 檢查是否是參數不匹配錯誤
+            let error_msg = e.to_string();
+            if error_msg.contains("mismatch") {
+                if !quiet {
+                    println!("WARNING: Existing file has incompatible parameters:");
+                    println!("  {}", error_msg);
+                    println!(
+                        "  The existing file will be removed and recreated with correct parameters."
+                    );
+                }
+                // 刪除不兼容的檔案
+                if let Err(remove_err) = std::fs::remove_file(&filename) {
+                    if !quiet {
+                        println!(
+                            "WARNING: Failed to remove incompatible file: {}",
+                            remove_err
+                        );
+                    }
+                }
+                // 重新開始計算
+                if !quiet {
+                    println!("Starting fresh calculation with correct parameters...");
+                }
+                // 重新調用自己來重新開始計算
+                return run_model_simulation(dim, steps, num_runs, get_filename_fn, model, quiet);
+            } else {
+                panic!("Failed to check progress: {}", e);
+            }
         }
     }
 
