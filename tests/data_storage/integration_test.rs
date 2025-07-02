@@ -4,7 +4,7 @@ use johansen_null_eigenspectra::data_storage::parallel_compute::run_model_simula
 use johansen_null_eigenspectra::johansen_models::JohansenModel;
 
 /// 重寫追加格式檔案的測試輔助函數
-fn rewrite_append_file(filename: &str, data: &[(u64, Vec<f64>)]) -> std::io::Result<()> {
+fn rewrite_append_file(filename: &str, data: &[(u32, Vec<f64>)]) -> std::io::Result<()> {
     // 刪除舊檔案
     let _ = std::fs::remove_file(filename);
 
@@ -22,7 +22,7 @@ fn rewrite_append_file(filename: &str, data: &[(u64, Vec<f64>)]) -> std::io::Res
 fn remove_seed_from_file(
     simulation: &EigenvalueSimulation,
     model: JohansenModel,
-    seeds_to_remove: &[u64],
+    seeds_to_remove: &[u32],
 ) -> std::io::Result<usize> {
     let filename = simulation.get_filename(model);
 
@@ -39,7 +39,7 @@ fn remove_seed_from_file(
     let original_count = data.len();
 
     // 過濾掉指定的seeds
-    let filtered_data: Vec<(u64, Vec<f64>)> = data
+    let filtered_data: Vec<(u32, Vec<f64>)> = data
         .into_iter()
         .filter(|(seed, _)| !seeds_to_remove.contains(seed))
         .collect();
@@ -201,7 +201,7 @@ fn test_resumable_functionality() {
     assert_eq!(final_data.len(), 5);
 
     // 檢查所有 seeds 都存在
-    let final_seeds: Vec<u64> = final_data.iter().map(|(seed, _)| *seed).collect();
+    let final_seeds: Vec<u32> = final_data.iter().map(|(seed, _)| *seed).collect();
     for expected_seed in 1..=5 {
         assert!(final_seeds.contains(&expected_seed));
     }

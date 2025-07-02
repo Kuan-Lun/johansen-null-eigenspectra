@@ -17,13 +17,13 @@ use super::config::{
 };
 
 /// 檔案格式常數
-const MAGIC_HEADER: &[u8] = b"EIGENVALS_V3"; // 12 bytes
+const MAGIC_HEADER: &[u8] = b"EIGENVALS_V4"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
 
 /// 計算預期檔案大小以便預先配置磁碟空間
 pub fn calculate_expected_file_size(num_runs: usize, eigenvalues_per_run: usize) -> u64 {
     let header = MAGIC_HEADER.len() as u64;
-    let record_size = 8 + 1 + eigenvalues_per_run as u64 * 8; // seed: 8 bytes, count: 1 byte (u8)
+    let record_size = 4 + 1 + eigenvalues_per_run as u64 * 8; // seed: 4 bytes (u32), count: 1 byte (u8)
     let metadata = EOF_MARKER.len() as u64 + 8 + 1; // eof_marker + total_count + eigenvalues_per_run(u8)
     header + record_size * num_runs as u64 + metadata
 }
@@ -192,7 +192,7 @@ impl AppendOnlyWriter {
     }
 
     /// 追加特徵值數據
-    pub fn append_eigenvalues(&mut self, seed: u64, eigenvalues: &[f64]) -> std::io::Result<()> {
+    pub fn append_eigenvalues(&mut self, seed: u32, eigenvalues: &[f64]) -> std::io::Result<()> {
         // 檢查特徵值數量是否在 u8 範圍內
         if eigenvalues.len() > u8::MAX as usize {
             return Err(std::io::Error::new(
@@ -224,7 +224,7 @@ impl AppendOnlyWriter {
             }
         }
 
-        // 寫入數據塊：[seed: 8 bytes] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
+        // 寫入數據塊：[seed: 4 bytes (u32)] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
         self.writer.write_all(&seed.to_le_bytes())?;
         self.writer
             .write_all(&(eigenvalues.len() as u8).to_le_bytes())?;
@@ -285,7 +285,7 @@ impl AppendOnlyWriter {
 }
 
 /// 讀取追加格式的檔案
-pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
+pub fn read_append_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
     let file = File::open(&path)?;
     let file_size = file.metadata()?.len();
 
@@ -356,20 +356,20 @@ fn read_with_metadata(
     reader: &mut BufReader<File>,
     total_count: usize,
     eigenvalues_per_run: usize,
-) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
+) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
     // 回到數據開始位置
     reader.seek(SeekFrom::Start(12))?; // 跳過魔術標頭
 
     let mut data = Vec::with_capacity(total_count);
 
     for _ in 0..total_count {
-        let mut seed_buf = [0u8; 8];
-        let mut count_buf = [0u8; 1]; // 改為 1 byte
+        let mut seed_buf = [0u8; 4]; // 改為 4 bytes (u32)
+        let mut count_buf = [0u8; 1]; // 1 byte (u8)
 
         reader.read_exact(&mut seed_buf)?;
         reader.read_exact(&mut count_buf)?;
 
-        let seed = u64::from_le_bytes(seed_buf);
+        let seed = u32::from_le_bytes(seed_buf);
         let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
         let eigenvalue_count = eigenvalue_count_u8 as usize;
 
@@ -406,15 +406,15 @@ fn read_with_metadata(
 }
 
 /// 掃描式讀取（用於沒有結束標記的檔案）
-fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
+fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
     // 回到數據開始位置
     reader.seek(SeekFrom::Start(12))?; // 跳過魔術標頭
 
     let mut data = Vec::new();
 
     loop {
-        let mut seed_buf = [0u8; 8];
-        let mut count_buf = [0u8; 1]; // 改為 1 byte
+        let mut seed_buf = [0u8; 4]; // 改為 4 bytes (u32)
+        let mut count_buf = [0u8; 1]; // 1 byte (u8)
 
         // 嘗試讀取 seed
         if reader.read_exact(&mut seed_buf).is_err() {
@@ -422,12 +422,22 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
         }
 
         // 檢查是否是 EOF 標記
-        if &seed_buf == EOF_MARKER {
-            break; // 遇到結束標記
+        // 由於 seed 現在是 4 bytes，而 EOF_MARKER 是 8 bytes，我們需要謹慎檢查
+        if seed_buf == [b'E', b'O', b'F', b'_'] {
+            // 可能是 EOF 標記的開始，檢查接下來的 4 字節
+            let mut remaining_eof = [0u8; 4];
+            if reader.read_exact(&mut remaining_eof).is_ok()
+                && remaining_eof == [b'M', b'A', b'R', b'K']
+            {
+                break; // 確認是 EOF 標記
+            } else {
+                // 不是完整的 EOF 標記，回退並繼續處理
+                reader.seek(SeekFrom::Current(-4))?;
+            }
         }
 
         // 檢查是否是全零（預分配的空白區域）
-        if seed_buf == [0u8; 8] {
+        if seed_buf == [0u8; 4] {
             // 檢查後續是否也是零，如果是則認為到達了預分配的空白區域
             if reader.read_exact(&mut count_buf).is_ok() && count_buf == [0u8; 1] {
                 break; // 遇到預分配的空白區域
@@ -442,7 +452,7 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
             break; // 不完整的數據塊
         }
 
-        let seed = u64::from_le_bytes(seed_buf);
+        let seed = u32::from_le_bytes(seed_buf);
         let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
         let eigenvalue_count = eigenvalue_count_u8 as usize;
 
@@ -475,7 +485,7 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
 }
 
 /// 檢查檔案進度（追加格式）
-pub fn check_append_progress<P: AsRef<Path>>(path: P) -> std::io::Result<(usize, Vec<u64>)> {
+pub fn check_append_progress<P: AsRef<Path>>(path: P) -> std::io::Result<(usize, Vec<u32>)> {
     if !path.as_ref().exists() {
         return Ok((0, Vec::new()));
     }
@@ -483,7 +493,7 @@ pub fn check_append_progress<P: AsRef<Path>>(path: P) -> std::io::Result<(usize,
     match read_append_file(&path) {
         Ok(data) => {
             let completed_runs = data.len();
-            let completed_seeds: Vec<u64> = data.iter().map(|(seed, _)| *seed).collect();
+            let completed_seeds: Vec<u32> = data.iter().map(|(seed, _)| *seed).collect();
             Ok((completed_runs, completed_seeds))
         }
         Err(_) => Ok((0, Vec::new())), // 檔案損壞或無法讀取，重新開始
@@ -491,9 +501,9 @@ pub fn check_append_progress<P: AsRef<Path>>(path: P) -> std::io::Result<(usize,
 }
 
 /// 獲取尚未完成的seed列表
-pub fn get_remaining_seeds(total_runs: usize, completed_seeds: &[u64]) -> Vec<u64> {
-    let completed_set: HashSet<u64> = completed_seeds.iter().copied().collect();
-    (1..=total_runs as u64)
+pub fn get_remaining_seeds(total_runs: usize, completed_seeds: &[u32]) -> Vec<u32> {
+    let completed_set: HashSet<u32> = completed_seeds.iter().copied().collect();
+    (1..=total_runs as u32)
         .filter(|seed| !completed_set.contains(seed))
         .collect()
 }
@@ -501,7 +511,7 @@ pub fn get_remaining_seeds(total_runs: usize, completed_seeds: &[u64]) -> Vec<u6
 /// 啟動追加寫入執行緒
 pub fn spawn_append_writer_thread(
     filename: String,
-    receiver: mpsc::Receiver<(u64, Vec<f64>)>,
+    receiver: mpsc::Receiver<(u32, Vec<f64>)>,
     total_runs: usize,
     completed_runs: usize,
     dim: usize,

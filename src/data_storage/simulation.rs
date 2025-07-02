@@ -69,13 +69,13 @@ impl EigenvalueSimulation {
 
     /// 從追加格式讀取指定模型的特徵值數據（包含seed）
     /// 注意：返回的數據可能無序，如需有序請自行排序
-    pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u64, Vec<f64>)>> {
+    pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
         let filename = self.get_filename(model);
         read_append_file(&filename)
     }
 
     /// 讀取所有模型的特徵值數據
-    pub fn read_all_data(&self) -> Vec<(JohansenModel, std::io::Result<Vec<(u64, Vec<f64>)>>)> {
+    pub fn read_all_data(&self) -> Vec<(JohansenModel, std::io::Result<Vec<(u32, Vec<f64>)>>)> {
         JohansenModel::all_models()
             .into_iter()
             .map(|model| (model, self.read_data(model)))

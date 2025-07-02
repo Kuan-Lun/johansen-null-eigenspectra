@@ -59,10 +59,13 @@ fn calculate_eigenvalues_from_matrices(
 pub fn calculate_eigenvalues(
     dim: usize,
     steps: usize,
-    seed: u64,
+    seed: u32,
     model: JohansenModel,
 ) -> Vec<f64> {
     use crate::rng_matrix::{brownian_motion_matrix, TimeAxisDirection};
+
+    // 將 u32 seed 轉換為 u64 以兼容底層 RNG
+    let seed_u64 = seed as u64;
 
     let delta_t = 1.0 / (steps as f64);
     let bm = brownian_motion_matrix(
@@ -71,7 +74,7 @@ pub fn calculate_eigenvalues(
         delta_t,
         TimeAxisDirection::AlongColumns,
         DMatrix::<f64>::zeros(dim, 1),
-        seed,
+        seed_u64,
     );
 
     let bm_current = bm.columns(1, steps);

@@ -26,9 +26,9 @@ fn spawn_statistics_collector(
 fn calculate_eigenvalues_parallel(
     dim: usize,
     steps: usize,
-    seeds: &[u64],
+    seeds: &[u32],
     model: JohansenModel,
-    sender: mpsc::Sender<(u64, Vec<f64>)>,
+    sender: mpsc::Sender<(u32, Vec<f64>)>,
     statistics_sender: mpsc::Sender<f64>,
     quiet: bool,
 ) {
@@ -175,7 +175,7 @@ fn run_single_model_simulation(
             }
 
             // 設置 channels
-            let (sender, receiver) = mpsc::channel::<(u64, Vec<f64>)>();
+            let (sender, receiver) = mpsc::channel::<(u32, Vec<f64>)>();
             let (statistics_sender, statistics_receiver) = mpsc::channel::<f64>();
 
             // 啟動支援斷點續傳的寫入執行緒
