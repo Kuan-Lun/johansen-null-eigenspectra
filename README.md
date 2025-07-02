@@ -71,6 +71,17 @@ The `--model` parameter accepts comma-separated model numbers (0-4). Each number
 
 The simulation writes results to `data/eigenvalues_modelX_dimY_stepsZ_N.dat` where `X` is the model number, `Y` is the dimension, `Z` is the number of steps, and `N` is the number of runs.
 
+## Data File Format
+
+The simulation results are stored in a custom binary format optimized for high-performance writing and reading of large-scale simulation data. For detailed information about the file structure, including byte-level format specifications, see [DATA_FORMAT.md](./DATA_FORMAT.md).
+
+**Key features of the data format:**
+
+- Efficient append-only writing with resume capability
+- Built-in data integrity verification
+- Optimized for large files (millions of records)
+- Cross-platform compatibility (little-endian encoding)
+
 ## Reading existing results
 
 The library exposes `EigenvalueSimulation` in the module `johansen_null_eigenspectra::data_storage`. To use it, you need to:
