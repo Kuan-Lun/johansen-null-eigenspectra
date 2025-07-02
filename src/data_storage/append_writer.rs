@@ -375,7 +375,7 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u64, Vec
         let eigenvalue_count = u32::from_le_bytes(count_buf) as usize;
 
         // 檢查特徵值數量是否合理（避免讀取損壞的數據）
-        if eigenvalue_count == 0 || eigenvalue_count > 1000 {
+        if eigenvalue_count == 0 || eigenvalue_count > 255 {
             break; // 不合理的特徵值數量，可能是預分配的空白區域
         }
 
