@@ -46,6 +46,12 @@ impl CliArgs {
             return None;
         }
 
+        // 顯示版本信息
+        if args.len() > 1 && (args[1] == "--version" || args[1] == "-v") {
+            Self::print_version();
+            return None;
+        }
+
         // 參數解析
         let mut i = 1;
         while i < args.len() {
@@ -258,6 +264,15 @@ impl CliArgs {
         true
     }
 
+    /// 顯示版本信息
+    fn print_version() {
+        println!(
+            "{} version {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
     /// 顯示幫助信息
     fn print_help(program_name: &str) {
         println!("Usage: {} [OPTIONS]", program_name);
@@ -279,6 +294,7 @@ impl CliArgs {
         );
         println!("  --quiet              suppress progress output");
         println!("  -h, --help           show this help message");
+        println!("  -v, --version        show version information");
         println!();
         println!("Model Numbers:");
         println!("  0: No intercept, no trend");
