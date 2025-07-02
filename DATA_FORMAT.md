@@ -32,8 +32,9 @@ This project uses a custom binary file format `EIGENVALS_V5` to efficiently stor
 |--------|-------------------|
 | 0      | No intercept, no trend |
 | 1      | Intercept, no trend, intercept in cointegration |
-| 2      | Intercept, trend, trend in cointegration |
-| ...    | (other models) |
+| 2      | Intercept, no trend, intercept not fully explained by cointegration |
+| 3      | Intercept, trend, trend in cointegration |
+| 4      | Intercept, trend, intercept and trend not fully explained by cointegration |
 
 ### 2. Data Records Section - Variable Length
 
