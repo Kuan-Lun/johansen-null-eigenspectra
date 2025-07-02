@@ -542,12 +542,14 @@ pub fn spawn_append_writer_thread(
                 let elapsed = start_time.elapsed();
 
                 if progress_ratio > 0.0 {
+                    // 計算剩餘時間時，只使用當前執行的進度和時間
+                    let remaining_runs = total_runs - completed_runs;
                     println!(
                         "Simulation progress: {}/{} ({:.2}%) - {}",
                         format_number_with_commas(current_total),
                         format_number_with_commas(total_runs),
                         progress_ratio * 100.0,
-                        format_remaining_time(elapsed, current_total, total_runs)
+                        format_remaining_time(elapsed, count, remaining_runs)
                     );
                 } else {
                     println!(
