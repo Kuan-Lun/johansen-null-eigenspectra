@@ -22,18 +22,35 @@ fn main() {
     // 配置 Rayon 線程池
     args.configure_rayon();
 
-    println!("=== Large-scale Simulation Demo ===");
-    println!("Starting simulation (supports resuming from checkpoint)...");
-    println!("Configuration:");
-    println!("  Steps: {}", format_number_with_commas(args.steps));
-    println!("  Runs: {}", format_number_with_commas(args.num_runs));
-    println!("  Dimension range: {} - {}", args.dim_start, args.dim_end);
-    println!("  Threads: {}", rayon::current_num_threads());
-    println!();
+    conditional_println!(args.quiet, "=== Large-scale Simulation Demo ===");
+    conditional_println!(
+        args.quiet,
+        "Starting simulation (supports resuming from checkpoint)..."
+    );
+    conditional_println!(args.quiet, "Configuration:");
+    conditional_println!(
+        args.quiet,
+        "  Steps: {}",
+        format_number_with_commas(args.steps)
+    );
+    conditional_println!(
+        args.quiet,
+        "  Runs: {}",
+        format_number_with_commas(args.num_runs)
+    );
+    conditional_println!(
+        args.quiet,
+        "  Dimension range: {} - {}",
+        args.dim_start,
+        args.dim_end
+    );
+    conditional_println!(args.quiet, "  Threads: {}", rayon::current_num_threads());
+    conditional_println_empty!(args.quiet);
 
     for dim in args.dim_start..=args.dim_end {
         let start_time = Instant::now();
-        println!(
+        conditional_println!(
+            args.quiet,
             "Simulation config: {} dimensions, {} steps, {} runs",
             dim,
             format_number_with_commas(args.steps),
@@ -50,18 +67,20 @@ fn main() {
             EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation(&models_vec);
         }
         let elapsed_time = start_time.elapsed();
-        println!(
+        conditional_println!(
+            args.quiet,
             "Simulation completed! Duration: {}",
             format_duration(elapsed_time)
         );
     }
 
-    println!("\n=== Result Reading Demo ===");
+    conditional_println!(args.quiet, "\n=== Result Reading Demo ===");
 
     // 讀取特定模型的數據
-    println!("Starting to read model data...");
+    conditional_println!(args.quiet, "Starting to read model data...");
     let simulation = EigenvalueSimulation::new(args.dim_start, args.steps, args.num_runs);
-    println!(
+    conditional_println!(
+        args.quiet,
         "Simulation config: {} dimensions, {} steps, {} runs",
         simulation.dim,
         format_number_with_commas(simulation.steps),
@@ -70,14 +89,15 @@ fn main() {
     let model = JohansenModel::NoInterceptNoTrend; // 使用無截距無趨勢模型作為範例
     match simulation.read_data(model) {
         Ok(data) => {
-            println!(
+            conditional_println!(
+                args.quiet,
                 "Successfully read data for model {}: {} records",
                 model,
                 format_number_with_commas(data.len())
             );
 
             // 顯示前5筆數據作為範例
-            println!("First 5 data records as examples:");
+            conditional_println!(args.quiet, "First 5 data records as examples:");
 
             // 計算前5筆數據的最大寬度以對齊顯示
             let preview_data: Vec<_> = data.iter().take(5).collect();
@@ -114,7 +134,8 @@ fn main() {
 
             for (i, (seed, eigenvalues)) in preview_data.iter().enumerate() {
                 let eigenvalue_str = &eigenvalue_strs[i];
-                println!(
+                conditional_println!(
+                    args.quiet,
                     "  Record {:2}: seed={:width1$}, eigenvalue sum={:width2$.6}, eigenvalues=[{:width3$}]",
                     i + 1,
                     seed,
@@ -126,22 +147,23 @@ fn main() {
                 );
             }
         }
-        Err(e) => println!("Failed to read data: {}", e),
+        Err(e) => conditional_println!(args.quiet, "Failed to read data: {}", e),
     }
 
     // 展示所有模型的狀態
-    println!("\n=== All Models Status ===");
+    conditional_println!(args.quiet, "\n=== All Models Status ===");
     let all_data = simulation.read_all_data();
     for (model, result) in all_data {
         match result {
-            Ok(data) => println!(
+            Ok(data) => conditional_println!(
+                args.quiet,
                 "  {}: {} data records",
                 model,
                 format_number_with_commas(data.len())
             ),
-            Err(_) => println!("  {}: No data or read failed", model),
+            Err(_) => conditional_println!(args.quiet, "  {}: No data or read failed", model),
         }
     }
 
-    println!("\nDemo completed!");
+    conditional_println!(args.quiet, "\nDemo completed!");
 }

@@ -5,6 +5,9 @@
 use crate::johansen_models::JohansenModel;
 use std::io::{self, Write};
 
+// 導入條件性輸出宏
+use crate::conditional_println;
+
 /// 命令行參數配置
 #[derive(Debug, Clone)]
 pub struct CliArgs {
@@ -300,13 +303,18 @@ impl CliArgs {
     /// 配置 Rayon 線程池
     pub fn configure_rayon(&self) {
         if let Some(threads) = self.num_threads {
-            println!("Using {} threads for parallel computation", threads);
+            conditional_println!(
+                self.quiet,
+                "Using {} threads for parallel computation",
+                threads
+            );
             rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build_global()
                 .expect("Failed to build thread pool");
         } else {
-            println!(
+            conditional_println!(
+                self.quiet,
                 "Using default thread count: {}",
                 rayon::current_num_threads()
             );
