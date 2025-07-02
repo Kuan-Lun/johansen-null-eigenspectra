@@ -36,6 +36,7 @@ The binary accepts several options. The following list mirrors the help output f
 --model <list>       comma separated list of model numbers to compute (default: 0,1,2,3,4)
 --quiet              suppress progress output
 -h, --help           show this help message
+-v, --version        show version information
 ```
 
 ## Usage Examples
@@ -101,7 +102,7 @@ simulation.run_simulation(&models); // or run_simulation_quiet(&models)
 1. Read the data using the method:
 
 ```rust
-pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u64, Vec<f64>)>>
+pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u32, Vec<f64>)>>
 ```
 
 ### Complete example
