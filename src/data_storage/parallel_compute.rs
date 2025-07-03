@@ -8,6 +8,7 @@ use crate::johansen_models::JohansenModel;
 use crate::johansen_statistics::calculate_eigenvalues;
 use rayon::prelude::*;
 use std::sync::mpsc;
+use std::thread;
 
 /// 使用指定seeds進行並行計算
 fn calculate_eigenvalues_parallel(
@@ -66,111 +67,94 @@ fn validate_output_file(filename: &str, expected_count: usize) {
     }
 }
 
-/// 支援斷點續傳的單一模型模擬計算
-pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
+/// 輸出模型資訊
+fn display_model_info(simulation: &EigenvalueSimulation, quiet: bool) {
     if !quiet {
         println!(
             "Using model: {} (supports resuming from checkpoint)",
             simulation.model
         );
     }
+}
 
-    let filename = simulation.get_filename(simulation.model);
-
-    // 檢查已完成的進度
-    match check_append_progress(
-        &filename,
+/// 讀取進度並輸出狀態
+fn load_progress(
+    simulation: &EigenvalueSimulation,
+    filename: &str,
+    quiet: bool,
+) -> std::io::Result<(usize, Vec<u32>)> {
+    let (completed_runs, completed_seeds) = check_append_progress(
+        filename,
         simulation.model.to_number(),
         simulation.dim as u8,
         simulation.steps as u32,
-    ) {
-        Ok((completed_runs, completed_seeds)) => {
-            if completed_runs >= simulation.num_runs {
-                if !quiet {
-                    println!("SUCCESS: calculation for this model already completed, skipping");
-                }
-                return;
-            }
+    )?;
 
-            if completed_runs > 0 && !quiet {
-                let max_completed_seed = completed_seeds.iter().max().copied().unwrap_or(0);
-                let min_completed_seed = completed_seeds.iter().min().copied().unwrap_or(0);
-                if !quiet {
-                    println!(
-                        "Detected {} completed out of {} calculations, Seeds range: {}-{}",
-                        format_number_with_commas(completed_runs),
-                        format_number_with_commas(simulation.num_runs),
-                        format_number_with_commas(min_completed_seed as usize),
-                        format_number_with_commas(max_completed_seed as usize)
-                    );
-                }
-            }
+    if completed_runs > 0 && !quiet {
+        let max_completed_seed = completed_seeds.iter().max().copied().unwrap_or(0);
+        let min_completed_seed = completed_seeds.iter().min().copied().unwrap_or(0);
+        println!(
+            "Detected {} completed out of {} calculations, Seeds range: {}-{}",
+            format_number_with_commas(completed_runs),
+            format_number_with_commas(simulation.num_runs),
+            format_number_with_commas(min_completed_seed as usize),
+            format_number_with_commas(max_completed_seed as usize)
+        );
+    }
 
-            // 獲取剩餘的seed
-            let remaining_seeds = get_remaining_seeds(simulation.num_runs, &completed_seeds);
-            let remaining_count = remaining_seeds.len();
+    Ok((completed_runs, completed_seeds))
+}
 
-            if remaining_count == 0 {
-                if !quiet {
-                    println!("SUCCESS: calculation for this model already completed");
-                }
-                return;
-            }
+/// 啟動寫入執行緒
+fn start_writer_thread(
+    filename: String,
+    simulation: &EigenvalueSimulation,
+    completed_runs: usize,
+    receiver: mpsc::Receiver<(u32, Vec<f64>)>,
+    quiet: bool,
+) -> thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+    let writer_config = crate::data_storage::thread_manager::WriterConfig {
+        filename,
+        total_runs: simulation.num_runs,
+        completed_runs,
+        dim: simulation.dim,
+        steps: simulation.steps,
+        model: simulation.model,
+        quiet,
+    };
+    spawn_append_writer_thread(writer_config, receiver)
+}
 
+/// 等待寫入執行緒結束
+fn wait_for_writer(
+    writer_handle: thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+    filename: &str,
+    quiet: bool,
+) {
+    match writer_handle.join() {
+        Ok(Ok(())) => {
             if !quiet {
-                println!(
-                    "Remaining {} calculations to complete",
-                    format_number_with_commas(remaining_count)
-                );
-            }
-
-            // 設置 channels
-            let (sender, receiver) = mpsc::channel::<(u32, Vec<f64>)>();
-
-            // 啟動支援斷點續傳的寫入執行緒
-            let writer_config = crate::data_storage::thread_manager::WriterConfig {
-                filename: filename.clone(),
-                total_runs: simulation.num_runs,
-                completed_runs,
-                dim: simulation.dim,
-                steps: simulation.steps,
-                model: simulation.model,
-                quiet,
-            };
-            let writer_handle = spawn_append_writer_thread(writer_config, receiver);
-
-            // 執行剩餘的並行計算
-            calculate_eigenvalues_parallel(
-                simulation.dim,
-                simulation.steps,
-                &remaining_seeds,
-                simulation.model,
-                sender,
-                quiet,
-            );
-
-            // 等待寫入執行緒完成
-            match writer_handle.join() {
-                Ok(Ok(())) => {
-                    if !quiet {
-                        println!("Saved to {filename}");
-                    }
-                }
-                Ok(Err(e)) => {
-                    panic!("Writer thread error: {e}");
-                }
-                Err(_) => {
-                    panic!("Writer thread panic");
-                }
-            }
-
-            // 驗證檔案輸出
-            if !quiet {
-                validate_output_file(&filename, simulation.num_runs);
+                println!("Saved to {filename}");
             }
         }
+        Ok(Err(e)) => {
+            panic!("Writer thread error: {e}");
+        }
+        Err(_) => {
+            panic!("Writer thread panic");
+        }
+    }
+}
+
+/// 支援斷點續傳的單一模型模擬計算
+pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
+    display_model_info(simulation, quiet);
+
+    let filename = simulation.get_filename(simulation.model);
+
+    let (completed_runs, completed_seeds) = match load_progress(simulation, &filename, quiet) {
+        Ok(res) => res,
         Err(e) => {
-            // 檢查是否是參數不匹配錯誤
             let error_msg = e.to_string();
             if error_msg.contains("mismatch") {
                 if !quiet {
@@ -180,25 +164,69 @@ pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
                         "  The existing file will be removed and recreated with correct parameters."
                     );
                 }
-                // 刪除不兼容的檔案
                 if let Err(remove_err) = std::fs::remove_file(&filename) {
                     if !quiet {
                         println!("WARNING: Failed to remove incompatible file: {remove_err}");
                     }
                 }
-                // 重新開始計算
                 if !quiet {
                     println!("Starting fresh calculation with correct parameters...");
                 }
-                // 重新調用自己來重新開始計算
                 return run_model_simulation(simulation, quiet);
             } else {
                 panic!("Failed to check progress: {e}");
             }
         }
+    };
+
+    if completed_runs >= simulation.num_runs {
+        if !quiet {
+            println!("SUCCESS: calculation for this model already completed, skipping");
+            println!("===============================\n");
+        }
+        return;
+    }
+
+    let remaining_seeds = get_remaining_seeds(simulation.num_runs, &completed_seeds);
+    let remaining_count = remaining_seeds.len();
+
+    if remaining_count == 0 {
+        if !quiet {
+            println!("SUCCESS: calculation for this model already completed");
+            println!("===============================\n");
+        }
+        return;
     }
 
     if !quiet {
+        println!(
+            "Remaining {} calculations to complete",
+            format_number_with_commas(remaining_count)
+        );
+    }
+
+    let (sender, receiver) = mpsc::channel::<(u32, Vec<f64>)>();
+    let writer_handle = start_writer_thread(
+        filename.clone(),
+        simulation,
+        completed_runs,
+        receiver,
+        quiet,
+    );
+
+    calculate_eigenvalues_parallel(
+        simulation.dim,
+        simulation.steps,
+        &remaining_seeds,
+        simulation.model,
+        sender,
+        quiet,
+    );
+
+    wait_for_writer(writer_handle, &filename, quiet);
+
+    if !quiet {
+        validate_output_file(&filename, simulation.num_runs);
         println!("===============================\n");
     }
 }
