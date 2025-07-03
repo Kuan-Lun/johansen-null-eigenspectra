@@ -137,7 +137,7 @@ simulation.run_simulation(&models); // or run_simulation_quiet(&models)
 1. Read the data using the method:
 
 ```rust
-pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u64, Vec<f64>)>>
+pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u32, Vec<f64>)>>
 ```
 
 ### Complete example
