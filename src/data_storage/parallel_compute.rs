@@ -1,7 +1,7 @@
-use super::append_writer::{
-    check_append_progress, get_remaining_seeds, read_append_file, spawn_append_writer_thread,
-};
 use super::config::BATCH_SIZE;
+use super::progress::{check_append_progress, get_remaining_seeds};
+use super::reader::read_append_file;
+use super::thread_manager::spawn_append_writer_thread;
 use crate::display_utils::format_number_with_commas;
 use crate::johansen_models::JohansenModel;
 use crate::johansen_statistics::calculate_eigenvalues;
@@ -175,7 +175,7 @@ fn run_single_model_simulation(
             let (statistics_sender, statistics_receiver) = mpsc::channel::<f64>();
 
             // 啟動支援斷點續傳的寫入執行緒
-            let writer_config = crate::data_storage::append_writer::WriterConfig {
+            let writer_config = crate::data_storage::thread_manager::WriterConfig {
                 filename: filename.clone(),
                 total_runs: num_runs,
                 completed_runs,

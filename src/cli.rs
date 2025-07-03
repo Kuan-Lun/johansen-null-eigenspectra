@@ -301,13 +301,9 @@ impl CliArgs {
         println!("  4: Intercept, trend, intercept and trend not fully explained by cointegration");
         println!();
         println!("Examples:");
-        println!(
-            "  {program_name} --threads 4 --steps 5,000 --runs 1,000,000"
-        );
+        println!("  {program_name} --threads 4 --steps 5,000 --runs 1,000,000");
         println!("  {program_name} --dim 5 --threads 8");
-        println!(
-            "  {program_name} --dim-start 2 --dim-end 8 --runs 500,000"
-        );
+        println!("  {program_name} --dim-start 2 --dim-end 8 --runs 500,000");
         println!("  {program_name} --model 0,2 --runs 100,000");
     }
 

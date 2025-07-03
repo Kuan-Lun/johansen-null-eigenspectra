@@ -1,6 +1,6 @@
 use johansen_null_eigenspectra::data_storage::EigenvalueSimulation;
-use johansen_null_eigenspectra::data_storage::append_writer::AppendOnlyWriter;
 use johansen_null_eigenspectra::data_storage::parallel_compute::run_model_simulation;
+use johansen_null_eigenspectra::data_storage::writer::AppendOnlyWriter;
 use johansen_null_eigenspectra::johansen_models::JohansenModel;
 
 /// 重寫追加格式檔案的測試輔助函數

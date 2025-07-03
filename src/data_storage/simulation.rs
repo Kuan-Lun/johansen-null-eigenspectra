@@ -2,8 +2,8 @@
 //!
 //! 提供 `EigenvalueSimulation` 結構體，這是整個模組的主要入口點。
 
-use super::append_writer::read_append_file;
 use super::parallel_compute::run_model_simulation;
+use super::reader::read_append_file;
 use crate::display_utils::format_number_with_commas;
 use crate::johansen_models::JohansenModel;
 

@@ -1,5 +1,5 @@
-use johansen_null_eigenspectra::data_storage::append_writer::{
-    AppendOnlyWriter, check_append_progress, read_append_file,
+use johansen_null_eigenspectra::data_storage::{
+    progress::check_append_progress, reader::read_append_file, writer::AppendOnlyWriter,
 };
 
 #[test]
