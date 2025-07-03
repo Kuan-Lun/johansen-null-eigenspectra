@@ -1,8 +1,11 @@
 FROM rust:1.88
 
-# 安裝系統套件（LAPACK, BLAS 等科學運算函式庫）
 RUN apt-get update && \
-    apt-get install -y git build-essential liblapack-dev libblas-dev gfortran pkg-config && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+    git pkg-config \
+    build-essential liblapack-dev libblas-dev gfortran \
+    bc pigz pbzip2 xz-utils && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
