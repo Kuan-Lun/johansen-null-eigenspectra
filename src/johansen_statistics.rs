@@ -79,7 +79,7 @@ pub fn calculate_eigenvalues(
 
     let bm_current = bm.columns(1, steps);
     let bm_previous = bm.columns(0, steps);
-    let dbm = &bm_current - &bm_previous;
+    let dbm = bm_current - bm_previous;
 
     calculate_eigenvalues_from_matrices(&bm_previous.into_owned(), &dbm, delta_t, model)
 }
@@ -191,8 +191,7 @@ fn construct_f_matrix(bm_previous: &DMatrix<f64>, model: JohansenModel) -> DMatr
             let zzt = &z * &zt;
             let zzt_inv = zzt.try_inverse().unwrap();
             let projection = &x_with_y2 * &zt * &zzt_inv * &z;
-            let fm = &x_with_y2 - &projection;
-            fm
+            &x_with_y2 - &projection
         }
     }
 }

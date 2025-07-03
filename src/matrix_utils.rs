@@ -76,7 +76,7 @@ pub fn sum_of_outer_products(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64>
         .map(|i| {
             let col1 = a.column(i);
             let col2 = b.column(i);
-            &col1 * &col2.transpose()
+            col1 * &col2.transpose()
         })
         .reduce(
             || DMatrix::<f64>::zeros(a_nrows, b_nrows), // 初始值：a的行數 × b的行數

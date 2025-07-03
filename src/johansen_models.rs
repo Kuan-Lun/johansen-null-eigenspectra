@@ -28,7 +28,7 @@ pub enum JohansenModel {
 #[allow(dead_code)]
 impl JohansenModel {
     /// 返回模型的數字標識符（0-4）
-    pub fn to_number(&self) -> u8 {
+    pub fn to_number(self) -> u8 {
         match self {
             JohansenModel::NoInterceptNoTrend => 0,
             JohansenModel::InterceptNoTrendWithInterceptInCoint => 1,

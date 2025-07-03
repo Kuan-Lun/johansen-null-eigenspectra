@@ -34,7 +34,7 @@ fn calculate_eigenvalues_parallel(
 ) {
     let chunk_size = BATCH_SIZE;
     let total_seeds = seeds.len();
-    let total_chunks = (total_seeds + chunk_size - 1) / chunk_size;
+    let total_chunks = total_seeds.div_ceil(chunk_size);
 
     for chunk_idx in 0..total_chunks {
         let chunk_start = chunk_idx * chunk_size;
@@ -47,17 +47,13 @@ fn calculate_eigenvalues_parallel(
             let eigenvalue_sum = eigenvalues.iter().sum::<f64>();
 
             // 發送結果給寫入執行緒
-            if let Err(_) = sender.send((seed, eigenvalues)) {
-                if !quiet {
-                    eprintln!("Failed to send results to writer thread");
-                }
+            if sender.send((seed, eigenvalues)).is_err() && !quiet {
+                eprintln!("Failed to send results to writer thread");
             }
 
             // 發送統計資料
-            if let Err(_) = statistics_sender.send(eigenvalue_sum) {
-                if !quiet {
-                    eprintln!("Failed to send statistics data");
-                }
+            if statistics_sender.send(eigenvalue_sum).is_err() && !quiet {
+                eprintln!("Failed to send statistics data");
             }
         });
     }
@@ -82,12 +78,9 @@ fn validate_output_file(filename: &str, expected_count: usize) {
             if e.to_string()
                 .contains("File format error: magic header mismatch")
             {
-                panic!(
-                    "CRITICAL ERROR: File format incompatibility detected - {}",
-                    e
-                );
+                panic!("CRITICAL ERROR: File format incompatibility detected - {e}");
             } else {
-                println!("ERROR: failed to read append file: {}", e);
+                println!("ERROR: failed to read append file: {e}");
             }
         }
     }
@@ -130,7 +123,7 @@ fn run_single_model_simulation(
     quiet: bool,
 ) {
     if !quiet {
-        println!("Using model: {} (supports resuming from checkpoint)", model);
+        println!("Using model: {model} (supports resuming from checkpoint)");
     }
 
     let filename = get_filename_fn(model);
@@ -182,16 +175,16 @@ fn run_single_model_simulation(
             let (statistics_sender, statistics_receiver) = mpsc::channel::<f64>();
 
             // 啟動支援斷點續傳的寫入執行緒
-            let writer_handle = spawn_append_writer_thread(
-                filename.clone(),
-                receiver,
-                num_runs,
+            let writer_config = crate::data_storage::append_writer::WriterConfig {
+                filename: filename.clone(),
+                total_runs: num_runs,
                 completed_runs,
                 dim,
                 steps,
                 model,
                 quiet,
-            );
+            };
+            let writer_handle = spawn_append_writer_thread(writer_config, receiver);
             let statistics_handle = spawn_statistics_collector(statistics_receiver);
 
             // 執行剩餘的並行計算
@@ -209,11 +202,11 @@ fn run_single_model_simulation(
             match writer_handle.join() {
                 Ok(Ok(())) => {
                     if !quiet {
-                        println!("Saved to {}", filename);
+                        println!("Saved to {filename}");
                     }
                 }
                 Ok(Err(e)) => {
-                    panic!("Writer thread error: {}", e);
+                    panic!("Writer thread error: {e}");
                 }
                 Err(_) => {
                     panic!("Writer thread panic");
@@ -247,7 +240,7 @@ fn run_single_model_simulation(
             if error_msg.contains("mismatch") {
                 if !quiet {
                     println!("WARNING: Existing file has incompatible parameters:");
-                    println!("  {}", error_msg);
+                    println!("  {error_msg}");
                     println!(
                         "  The existing file will be removed and recreated with correct parameters."
                     );
@@ -255,10 +248,7 @@ fn run_single_model_simulation(
                 // 刪除不兼容的檔案
                 if let Err(remove_err) = std::fs::remove_file(&filename) {
                     if !quiet {
-                        println!(
-                            "WARNING: Failed to remove incompatible file: {}",
-                            remove_err
-                        );
+                        println!("WARNING: Failed to remove incompatible file: {remove_err}");
                     }
                 }
                 // 重新開始計算
@@ -268,7 +258,7 @@ fn run_single_model_simulation(
                 // 重新調用自己來重新開始計算
                 return run_model_simulation(dim, steps, num_runs, get_filename_fn, model, quiet);
             } else {
-                panic!("Failed to check progress: {}", e);
+                panic!("Failed to check progress: {e}");
             }
         }
     }

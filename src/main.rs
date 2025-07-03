@@ -114,7 +114,7 @@ fn main() {
             let max_eigenvalue_width = preview_data
                 .iter()
                 .flat_map(|(_, eigenvalues)| eigenvalues.iter())
-                .map(|x| format!("{:.6}", x).len())
+                .map(|x| format!("{x:.6}").len())
                 .max()
                 .unwrap_or(8);
 
@@ -124,7 +124,7 @@ fn main() {
                 .map(|(_, eigenvalues)| {
                     eigenvalues
                         .iter()
-                        .map(|x| format!("{:width$.6}", x, width = max_eigenvalue_width))
+                        .map(|x| format!("{x:max_eigenvalue_width$.6}"))
                         .collect::<Vec<_>>()
                         .join(", ")
                 })

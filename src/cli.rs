@@ -110,7 +110,7 @@ impl CliArgs {
                         match Self::parse_models(&value) {
                             Ok(models) => config.models = Some(models),
                             Err(e) => {
-                                eprintln!("Error: {}", e);
+                                eprintln!("Error: {e}");
                                 return None;
                             }
                         }
@@ -142,7 +142,7 @@ impl CliArgs {
     /// 解析下一個參數值（支援逗號分隔的數字）
     fn parse_next_arg(args: &[String], index: usize, param_name: &str) -> Option<Option<usize>> {
         if index + 1 >= args.len() {
-            eprintln!("Error: {} parameter requires a value", param_name);
+            eprintln!("Error: {param_name} parameter requires a value");
             return None;
         }
 
@@ -154,8 +154,7 @@ impl CliArgs {
             Ok(value) => Some(Some(value)),
             Err(_) => {
                 eprintln!(
-                    "Error: {} parameter must be a positive integer (commas allowed, e.g., 1,000,000)",
-                    param_name
+                    "Error: {param_name} parameter must be a positive integer (commas allowed, e.g., 1,000,000)"
                 );
                 None
             }
@@ -168,7 +167,7 @@ impl CliArgs {
         param_name: &str,
     ) -> Option<Option<String>> {
         if index + 1 >= args.len() {
-            eprintln!("Error: {} parameter requires a value", param_name);
+            eprintln!("Error: {param_name} parameter requires a value");
             return None;
         }
         Some(Some(args[index + 1].clone()))
@@ -188,7 +187,7 @@ impl CliArgs {
                 .and_then(JohansenModel::from_number)
             {
                 Some(m) => models.push(m),
-                None => return Err(format!("無效的模型代號: {}", part_trim)),
+                None => return Err(format!("無效的模型代號: {part_trim}")),
             }
         }
         if models.is_empty() {
@@ -231,12 +230,10 @@ impl CliArgs {
 
         if threads > available_threads {
             eprintln!(
-                "Warning: specified thread count ({}) exceeds available logical cores ({})",
-                threads, available_threads
+                "Warning: specified thread count ({threads}) exceeds available logical cores ({available_threads})"
             );
             eprintln!(
-                "This may cause performance degradation due to thread contention. Recommend using no more than {} threads.",
-                available_threads
+                "This may cause performance degradation due to thread contention. Recommend using no more than {available_threads} threads."
             );
 
             // 如果超過太多，直接拒絕
@@ -275,7 +272,7 @@ impl CliArgs {
 
     /// 顯示幫助信息
     fn print_help(program_name: &str) {
-        println!("Usage: {} [OPTIONS]", program_name);
+        println!("Usage: {program_name} [OPTIONS]");
         println!();
         println!("Options:");
         println!(
@@ -305,15 +302,13 @@ impl CliArgs {
         println!();
         println!("Examples:");
         println!(
-            "  {} --threads 4 --steps 5,000 --runs 1,000,000",
-            program_name
+            "  {program_name} --threads 4 --steps 5,000 --runs 1,000,000"
         );
-        println!("  {} --dim 5 --threads 8", program_name);
+        println!("  {program_name} --dim 5 --threads 8");
         println!(
-            "  {} --dim-start 2 --dim-end 8 --runs 500,000",
-            program_name
+            "  {program_name} --dim-start 2 --dim-end 8 --runs 500,000"
         );
-        println!("  {} --model 0,2 --runs 100,000", program_name);
+        println!("  {program_name} --model 0,2 --runs 100,000");
     }
 
     /// 配置 Rayon 線程池

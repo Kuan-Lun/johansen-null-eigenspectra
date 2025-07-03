@@ -43,7 +43,7 @@ fn calculate_read_buffer_size(file_size: u64) -> usize {
     } else if file_size < HUNDRED_MB {
         // 使用檔案大小的 1/8 作為緩衝區，但不超過 4MB
         let buffer_size = (file_size / 8) as usize;
-        buffer_size.min(4 * 1024 * 1024).max(MIN_READ_BUFFER_SIZE)
+        buffer_size.clamp(MIN_READ_BUFFER_SIZE, 4 * 1024 * 1024)
     } else {
         MAX_READ_BUFFER_SIZE
     }
@@ -80,6 +80,7 @@ impl AppendOnlyWriter {
             // 新檔案：直接創建並寫入魔術標頭和元數據
             let file = OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .read(true)
                 .write(true)
                 .open(path_ref)?;
@@ -119,26 +120,21 @@ impl AppendOnlyWriter {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
                             format!(
-                                "Model mismatch: file has model {}, expected {}",
-                                file_model, model
+                                "Model mismatch: file has model {file_model}, expected {model}"
                             ),
                         ));
                     }
                     if file_dim != dim {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
-                            format!(
-                                "Dimension mismatch: file has dim {}, expected {}",
-                                file_dim, dim
-                            ),
+                            format!("Dimension mismatch: file has dim {file_dim}, expected {dim}"),
                         ));
                     }
                     if file_steps != steps {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
                             format!(
-                                "Steps mismatch: file has steps {}, expected {}",
-                                file_steps, steps
+                                "Steps mismatch: file has steps {file_steps}, expected {steps}"
                             ),
                         ));
                     }
@@ -167,6 +163,7 @@ impl AppendOnlyWriter {
                     // 重新創建新文件
                     let file = OpenOptions::new()
                         .create(true)
+                        .truncate(true)
                         .read(true)
                         .write(true)
                         .open(path_ref)?;
@@ -208,7 +205,7 @@ impl AppendOnlyWriter {
                 file.seek(SeekFrom::End(-17))?; // eof_marker(8) + count(8) + eigenvalues_per_run(1) = 17
                 let mut eof_buf = [0u8; 8];
                 if let Ok(()) = file.read_exact(&mut eof_buf) {
-                    if &eof_buf == EOF_MARKER {
+                    if eof_buf == EOF_MARKER {
                         let new_len = file_len - 17;
                         file.set_len(new_len)?;
                         if !quiet {
@@ -334,10 +331,11 @@ impl AppendOnlyWriter {
     }
 }
 
+/// 檔案讀取結果類型別名
+pub type FileReadResult = std::io::Result<(Vec<(u32, Vec<f64>)>, u8, u8, u32)>;
+
 /// 讀取追加格式的檔案
-pub fn read_append_file<P: AsRef<Path>>(
-    path: P,
-) -> std::io::Result<(Vec<(u32, Vec<f64>)>, u8, u8, u32)> {
+pub fn read_append_file<P: AsRef<Path>>(path: P) -> FileReadResult {
     let file = File::open(&path)?;
     let file_size = file.metadata()?.len();
 
@@ -348,7 +346,7 @@ pub fn read_append_file<P: AsRef<Path>>(
     // 檢查魔術標頭
     let mut magic_buf = [0u8; 12];
     reader.read_exact(&mut magic_buf)?;
-    if &magic_buf != MAGIC_HEADER {
+    if magic_buf != MAGIC_HEADER {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "File format error: magic header mismatch",
@@ -401,7 +399,7 @@ fn read_file_metadata(
     // 檢查 EOF 標記
     let mut eof_buf = [0u8; 8];
     reader.read_exact(&mut eof_buf)?;
-    if &eof_buf != EOF_MARKER {
+    if eof_buf != EOF_MARKER {
         return Ok(None); // 沒有有效的結束標記
     }
 
@@ -569,26 +567,21 @@ pub fn check_append_progress<P: AsRef<Path>>(
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "Model mismatch: file has model {}, expected {}",
-                        file_model, expected_model
+                        "Model mismatch: file has model {file_model}, expected {expected_model}"
                     ),
                 ));
             }
             if file_dim != expected_dim {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!(
-                        "Dimension mismatch: file has dim {}, expected {}",
-                        file_dim, expected_dim
-                    ),
+                    format!("Dimension mismatch: file has dim {file_dim}, expected {expected_dim}"),
                 ));
             }
             if file_steps != expected_steps {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "Steps mismatch: file has steps {}, expected {}",
-                        file_steps, expected_steps
+                        "Steps mismatch: file has steps {file_steps}, expected {expected_steps}"
                     ),
                 ));
             }
@@ -609,18 +602,33 @@ pub fn get_remaining_seeds(total_runs: usize, completed_seeds: &[u32]) -> Vec<u3
         .collect()
 }
 
+/// 寫入執行緒配置
+pub struct WriterConfig {
+    pub filename: String,
+    pub total_runs: usize,
+    pub completed_runs: usize,
+    pub dim: usize,
+    pub steps: usize,
+    pub model: crate::johansen_models::JohansenModel,
+    pub quiet: bool,
+}
+
 /// 啟動追加寫入執行緒
 pub fn spawn_append_writer_thread(
-    filename: String,
+    config: WriterConfig,
     receiver: mpsc::Receiver<(u32, Vec<f64>)>,
-    total_runs: usize,
-    completed_runs: usize,
-    dim: usize,
-    steps: usize,
-    model: crate::johansen_models::JohansenModel,
-    quiet: bool,
 ) -> thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
     thread::spawn(move || {
+        let WriterConfig {
+            filename,
+            total_runs,
+            completed_runs,
+            dim,
+            steps,
+            model,
+            quiet,
+        } = config;
+
         let eigenvalues_per_run = match model {
             crate::johansen_models::JohansenModel::InterceptNoTrendWithInterceptInCoint
             | crate::johansen_models::JohansenModel::InterceptTrendWithTrendInCoint => dim + 1,

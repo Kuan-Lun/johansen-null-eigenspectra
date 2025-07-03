@@ -214,7 +214,7 @@ pub fn format_percentage(completed: usize, total: usize, decimal_places: Option<
     let percentage = (completed as f64 / total as f64) * 100.0;
     let decimal_places = decimal_places.unwrap_or(1);
 
-    format!("{:.precision$}%", percentage, precision = decimal_places)
+    format!("{percentage:.decimal_places$}%")
 }
 
 /// 格式化進度條

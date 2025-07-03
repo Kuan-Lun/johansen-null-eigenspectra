@@ -7,6 +7,9 @@ use super::parallel_compute::run_model_simulation;
 use crate::display_utils::format_number_with_commas;
 use crate::johansen_models::JohansenModel;
 
+/// 讀取所有數據的結果類型別名
+pub type AllDataResult = Vec<(JohansenModel, std::io::Result<Vec<(u32, Vec<f64>)>>)>;
+
 /// 特徵值模擬配置結構體
 /// 封裝所有模擬參數，提供統一的運算和讀取接口
 #[derive(Debug, Clone)]
@@ -75,7 +78,7 @@ impl EigenvalueSimulation {
     }
 
     /// 讀取所有模型的特徵值數據
-    pub fn read_all_data(&self) -> Vec<(JohansenModel, std::io::Result<Vec<(u32, Vec<f64>)>>)> {
+    pub fn read_all_data(&self) -> AllDataResult {
         JohansenModel::all_models()
             .into_iter()
             .map(|model| (model, self.read_data(model)))
