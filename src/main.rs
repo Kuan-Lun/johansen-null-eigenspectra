@@ -28,39 +28,25 @@ fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) 
 }
 
 /// 從已有的數據文件中收集和分析統計信息
-fn analyze_simulation_statistics(
-    simulation: &EigenvalueSimulation,
-    models: &[JohansenModel],
-    quiet: bool,
-) {
-    if quiet {
-        return;
-    }
+fn analyze_simulation_statistics(simulation: &EigenvalueSimulation, model: JohansenModel) {
+    match simulation.read_data(model) {
+        Ok(data) => {
+            if !data.is_empty() {
+                let eigenvalue_sums: Vec<f64> = data
+                    .iter()
+                    .map(|(_, eigenvalues)| eigenvalues.iter().sum())
+                    .collect();
 
-    let mut total_eigenvalue_sums = Vec::new();
-
-    for &model in models {
-        match simulation.read_data(model) {
-            Ok(data) => {
-                if !data.is_empty() {
-                    let eigenvalue_sums: Vec<f64> = data
-                        .iter()
-                        .map(|(_, eigenvalues)| eigenvalues.iter().sum())
-                        .collect();
-
-                    total_eigenvalue_sums.extend(eigenvalue_sums);
-                }
-            }
-            Err(_) => {
-                // 如果讀取失敗，忽略這個模型
+                let mut sorted_eigenvalue_sums = eigenvalue_sums;
+                sorted_eigenvalue_sums.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
+                println!("Statistics for model {model}:");
+                print_percentile_statistics(&sorted_eigenvalue_sums, &percentiles);
             }
         }
-    }
-
-    if !total_eigenvalue_sums.is_empty() {
-        total_eigenvalue_sums.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
-        print_percentile_statistics(&total_eigenvalue_sums, &percentiles);
+        Err(_) => {
+            // 如果讀取失敗，忽略這個模型
+        }
     }
 }
 
@@ -135,11 +121,10 @@ fn main() {
                 simulation.run_simulation_quiet(model);
             } else {
                 simulation.run_simulation(model);
+                // 收集並顯示統計數據（在每個模型運行完後立即分析）
+                analyze_simulation_statistics(&simulation, model);
             }
         }
-
-        // 收集並顯示統計數據
-        analyze_simulation_statistics(&simulation, &models_vec, args.quiet);
 
         let elapsed_time = start_time.elapsed();
         conditional_println!(
