@@ -62,7 +62,7 @@ pub fn calculate_eigenvalues(
     seed: u32,
     model: JohansenModel,
 ) -> Vec<f64> {
-    use crate::rng_matrix::{brownian_motion_matrix, TimeAxisDirection};
+    use crate::rng_matrix::{TimeAxisDirection, brownian_motion_matrix};
 
     // 將 u32 seed 轉換為 u64 以兼容底層 RNG
     let seed_u64 = seed as u64;
