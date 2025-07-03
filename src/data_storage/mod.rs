@@ -10,6 +10,7 @@ pub mod progress;
 pub mod reader;
 mod simulation;
 pub mod thread_manager;
+pub mod uleb128; // ULEB128 編碼/解碼
 pub mod writer;
 
 // Re-export the main API

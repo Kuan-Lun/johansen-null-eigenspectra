@@ -10,6 +10,7 @@ use std::path::Path;
 use super::config::{FLUSH_INTERVAL, WRITE_BUFFER_CAPACITY};
 use super::file_format::{EOF_MARKER, MAGIC_HEADER};
 use super::reader::read_append_file;
+use super::uleb128;
 
 /// 追加寫入器 - 支援高效的數據追加和斷點續傳
 pub struct AppendOnlyWriter {
@@ -237,8 +238,9 @@ impl AppendOnlyWriter {
             }
         }
 
-        // 寫入數據塊：[seed: 4 bytes (u32)] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
-        self.writer.write_all(&seed.to_le_bytes())?;
+        // 寫入數據塊：[seed: ULEB128] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
+        let seed_bytes = uleb128::encode(seed);
+        self.writer.write_all(&seed_bytes)?;
         self.writer
             .write_all(&(eigenvalues.len() as u8).to_le_bytes())?;
 

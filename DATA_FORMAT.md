@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project uses a custom binary file format `EIGENVALS_V5` to efficiently store eigenvalue simulation results from Johansen cointegration tests. The format is designed for high-performance writing and reading of large-scale simulation data, with support for resume functionality and data integrity verification.
+This project uses a custom binary file format `EIGENVALS_V6` to efficiently store eigenvalue simulation results from Johansen cointegration tests. The format is designed for high-performance writing and reading of large-scale simulation data, with support for resume functionality and data integrity verification.
 
 ## File Structure
 
@@ -16,14 +16,14 @@ This project uses a custom binary file format `EIGENVALS_V5` to efficiently stor
 
 | Offset | Size | Type  | Description | Example Value |
 |--------|------|-------|-------------|---------------|
-| 0      | 12   | ASCII | Magic header "EIGENVALS_V5" | `45 49 47 45 4E 56 41 4C 53 5F 56 35` |
+| 0      | 12   | ASCII | Magic header "EIGENVALS_V6" | `45 49 47 45 4E 56 41 4C 53 5F 56 36` |
 | 12     | 1    | u8    | Johansen model number | `00` (model 0) |
 | 13     | 1    | u8    | Time series dimension | `01` (1 dimension) |
 | 14     | 4    | u32   | Number of simulation steps (little-endian) | `0A 00 00 00` (10 steps) |
 
 #### Magic Header Description
 
-- `EIGENVALS_V5`: Indicates file format version 5
+- `EIGENVALS_V6`: Indicates file format version 6
 - Used for file type identification and format error prevention
 
 #### Model Number Mapping
@@ -42,11 +42,20 @@ Each data record represents one Monte Carlo simulation result:
 
 | Offset | Size | Type | Description |
 |--------|------|------|-------------|
-| 0      | 4    | u32  | Random seed (little-endian) |
-| 4      | 1    | u8   | Number of eigenvalues |
-| 5      | 8×N  | f64  | N eigenvalues (8 bytes each, little-endian) |
+| 0      | 1-5  | ULEB128 | Random seed (ULEB128 encoded u32) |
+| Variable | 1 | u8   | Number of eigenvalues |
+| Variable | 8×N | f64  | N eigenvalues (8 bytes each, little-endian) |
 
-**Record size calculation**: `5 + 8 × number_of_eigenvalues` bytes
+**Record size calculation**: `ULEB128_size(seed) + 1 + 8 × number_of_eigenvalues` bytes
+
+#### ULEB128 Encoding
+
+ULEB128 (Unsigned Little Endian Base 128) is a variable-length encoding for unsigned integers:
+
+- Each byte uses 7 bits for data and 1 bit as continuation flag
+- Values 0-127 use 1 byte, 128-16383 use 2 bytes, etc.
+- Maximum size for u32: 5 bytes
+- More efficient for small seed values
 
 #### Eigenvalue Count Notes
 
@@ -65,46 +74,67 @@ Each data record represents one Monte Carlo simulation result:
 ## File Size Calculation
 
 ```rust
-file_size = header_size + (record_size × record_count) + metadata_size
-          = 18 + (5 + 8 × eigenvalues_count) × record_count + 17
+file_size = header_size + sum(record_sizes) + metadata_size
+          = 18 + sum(ULEB128_size(seed) + 1 + 8 × eigenvalues_count) + 17
 ```
 
 ### Example Calculation
 
-For a 1-dimension, 10,000,000 simulation file:
+For a 1-dimension, 10,000,000 simulation file with sequential seeds (0 to 9,999,999):
+
+- Seeds 0-127: 1 byte each (128 seeds)
+- Seeds 128-16383: 2 bytes each (16,256 seeds)
+- Seeds 16384-2097151: 3 bytes each (2,080,768 seeds)
+- Seeds 2097152-9999999: 4 bytes each (7,902,848 seeds)
 
 ```text
-file_size = 18 + (5 + 8×1) × 10,000,000 + 17
-          = 18 + 13 × 10,000,000 + 17  
-          = 130,000,035 bytes ≈ 124 MB
+file_size ≈ 18 + (128×2 + 16256×3 + 2080768×4 + 7902848×5) + 17
+          ≈ 18 + (256 + 48768 + 8323072 + 39514240) + 17
+          ≈ 47,886,371 bytes ≈ 45.7 MB
 ```
+
+This is significantly smaller than the fixed 4-byte encoding (130 MB) for sequential seeds.
 
 ## Real-World Examples
 
 ### File Header Example
 
 ```hex
-45 49 47 45 4E 56 41 4C 53 5F 56 35 00 01 0A 00 00 00
+45 49 47 45 4E 56 41 4C 53 5F 56 36 00 01 0A 00 00 00
 ```
 
 Parsed:
 
-- `45 49 47 45 4E 56 41 4C 53 5F 56 35`: "EIGENVALS_V5"
+- `45 49 47 45 4E 56 41 4C 53 5F 56 36`: "EIGENVALS_V6"
 - `00`: Model 0
 - `01`: 1 dimension
 - `0A 00 00 00`: 10 steps
 
-### Data Record Example
+### Data Record Examples
+
+#### Example 1: Seed = 1 (ULEB128: 1 byte)
 
 ```hex
-01 00 00 00 01 3F F0 00 00 00 00 00 00
+01 01 3F F0 00 00 00 00 00 00
 ```
 
 Parsed:
 
-- `01 00 00 00`: Seed = 1
+- `01`: Seed = 1 (ULEB128 encoded)
 - `01`: 1 eigenvalue
 - `3F F0 00 00 00 00 00 00`: Eigenvalue = 1.0
+
+#### Example 2: Seed = 300 (ULEB128: 2 bytes)
+
+```hex
+AC 02 01 40 00 00 00 00 00 00 00
+```
+
+Parsed:
+
+- `AC 02`: Seed = 300 (ULEB128: 0xAC | (0x02 << 7) = 172 + 256 = 300)
+- `01`: 1 eigenvalue
+- `40 00 00 00 00 00 00 00`: Eigenvalue = 2.0
 
 ### EOF Marker Example
 
@@ -164,9 +194,10 @@ When file lacks EOF marker:
 
 ## Version Compatibility
 
-- **Current Version**: V5
-- **Backward Compatibility**: Detects old format versions and prompts for upgrade
-- **Format Evolution**: Version number in magic header supports future extensions
+- **Current Version**: V6
+- **Compatibility**: Only supports V6 format files (magic header: `EIGENVALS_V6`)
+- **Legacy Files**: Older format versions are not supported and will cause format errors
+- **Format Evolution**: Version number in magic header designed to support future extensions
 
 ## Use Cases
 

@@ -8,9 +8,16 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use super::file_format::{EOF_MARKER, MAGIC_HEADER, calculate_read_buffer_size};
+use super::uleb128;
 
 /// 檔案讀取結果類型別名
 pub type FileReadResult = std::io::Result<(Vec<(u32, Vec<f64>)>, u8, u8, u32)>;
+
+/// 從 BufReader 讀取 ULEB128 編碼的 u32 值
+fn read_uleb128(reader: &mut BufReader<File>) -> std::io::Result<u32> {
+    uleb128::read_from_reader(reader)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+}
 
 /// 讀取追加格式的檔案
 pub fn read_append_file<P: AsRef<Path>>(path: P) -> FileReadResult {
@@ -106,13 +113,11 @@ fn read_with_metadata(
     let mut data = Vec::with_capacity(total_count);
 
     for _ in 0..total_count {
-        let mut seed_buf = [0u8; 4]; // 改為 4 bytes (u32)
+        // 讀取 ULEB128 編碼的 seed
+        let seed = read_uleb128(reader)?;
+
         let mut count_buf = [0u8; 1]; // 1 byte (u8)
-
-        reader.read_exact(&mut seed_buf)?;
         reader.read_exact(&mut count_buf)?;
-
-        let seed = u32::from_le_bytes(seed_buf);
         let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
         let eigenvalue_count = eigenvalue_count_u8 as usize;
 
@@ -155,53 +160,36 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u32, Vec
 
     let mut data = Vec::new();
 
+    #[allow(clippy::while_let_loop)]
     loop {
-        let mut seed_buf = [0u8; 4]; // 改為 4 bytes (u32)
+        // 嘗試讀取 ULEB128 編碼的 seed
+        let seed = match read_uleb128(reader) {
+            Ok(s) => s,
+            Err(_) => break, // 到達檔案末尾或遇到錯誤
+        };
+
+        // 檢查是否遇到 EOF 標記
+        // 由於使用 ULEB128，需要在讀取 eigenvalue count 後檢查 EOF
         let mut count_buf = [0u8; 1]; // 1 byte (u8)
-
-        // 嘗試讀取 seed
-        if reader.read_exact(&mut seed_buf).is_err() {
-            break; // 到達檔案末尾
-        }
-
-        // 檢查是否是 EOF 標記
-        // 由於 seed 現在是 4 bytes，而 EOF_MARKER 是 8 bytes，我們需要謹慎檢查
-        if seed_buf == [b'E', b'O', b'F', b'_'] {
-            // 可能是 EOF 標記的開始，檢查接下來的 4 字節
-            let mut remaining_eof = [0u8; 4];
-            if reader.read_exact(&mut remaining_eof).is_ok()
-                && remaining_eof == [b'M', b'A', b'R', b'K']
-            {
-                break; // 確認是 EOF 標記
-            } else {
-                // 不是完整的 EOF 標記，回退並繼續處理
-                reader.seek(SeekFrom::Current(-4))?;
-            }
-        }
-
-        // 檢查是否是全零（預分配的空白區域）
-        if seed_buf == [0u8; 4] {
-            // 檢查後續是否也是零，如果是則認為到達了預分配的空白區域
-            if reader.read_exact(&mut count_buf).is_ok() && count_buf == [0u8; 1] {
-                break; // 遇到預分配的空白區域
-            } else {
-                // 如果不是全零的 count，則繼續處理（seed 為 0 是有效的）
-                reader.seek(SeekFrom::Current(-1))?; // 回退 count_buf (1 byte)
-            }
-        }
-
-        // 讀取特徵值數量
         if reader.read_exact(&mut count_buf).is_err() {
             break; // 不完整的數據塊
         }
 
-        let seed = u32::from_le_bytes(seed_buf);
         let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
         let eigenvalue_count = eigenvalue_count_u8 as usize;
 
         // 檢查特徵值數量是否合理（u8 已經限制在 0-255 範圍內）
         if eigenvalue_count == 0 {
-            break; // 零計數表示可能到達了預分配的空白區域
+            // 零計數可能表示到達了預分配的空白區域
+            // 檢查接下來是否是 EOF_MARKER
+            let current_pos = reader.stream_position()?;
+            let mut potential_eof = vec![0u8; EOF_MARKER.len()];
+            if reader.read_exact(&mut potential_eof).is_ok() && potential_eof == EOF_MARKER {
+                break; // 確認遇到 EOF 標記
+            } else {
+                // 回退並繼續，因為可能只是一個零計數的有效記錄
+                reader.seek(SeekFrom::Start(current_pos))?;
+            }
         }
 
         // 讀取特徵值
