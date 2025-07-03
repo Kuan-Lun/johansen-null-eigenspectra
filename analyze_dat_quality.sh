@@ -22,7 +22,7 @@ ls -lh *.dat
 echo
 
 # 對每個 dat 檔案進行分析
-overall_best_ratio=0
+overall_highest_ratio=0  # 追蹤最高壓縮率(代表原始編碼效率最低的檔案)
 total_files=0
 for datfile in *.dat; do
     echo "=========================================="
@@ -84,22 +84,22 @@ for datfile in *.dat; do
     # 根據最佳壓縮率評估
     best_ratio=$(echo "$gz1_ratio $gz9_ratio $bz2_ratio $xz_ratio" | tr ' ' '\n' | sort -nr | head -1)
     
-    # 更新全局最佳結果
-    if [ $(echo "$best_ratio > $overall_best_ratio" | bc) -eq 1 ]; then
-        overall_best_ratio=$best_ratio
+    # 追蹤最高壓縮率(用於找出編碼效率最低的檔案)
+    if [ $(echo "$best_ratio > $overall_highest_ratio" | bc) -eq 1 ]; then
+        overall_highest_ratio=$best_ratio
     fi
     total_files=$((total_files + 1))
     
-    if [ $(echo "$best_ratio > 50" | bc) -eq 1 ]; then
-        echo "[優秀] 對於完整 f64 精度來說，編碼非常高效，壓縮率高於 50%"
-    elif [ $(echo "$best_ratio > 35" | bc) -eq 1 ]; then
-        echo "[良好] 對於完整 f64 精度來說，編碼效率不錯，壓縮率 35-50%"
-    elif [ $(echo "$best_ratio > 20" | bc) -eq 1 ]; then
-        echo "[中等] 對於完整 f64 精度來說，編碼效率尚可，壓縮率 20-35%"
-    elif [ $(echo "$best_ratio > 10" | bc) -eq 1 ]; then
-        echo "[普通] 編碼有改進空間，壓縮率 10-20%，可考慮優化數據結構"
+    if [ $(echo "$best_ratio < 10" | bc) -eq 1 ]; then
+        echo "[優秀] 原始編碼極高效，壓縮率低於 10%，幾乎達到 f64 數據理論極限"
+    elif [ $(echo "$best_ratio < 20" | bc) -eq 1 ]; then
+        echo "[良好] 原始編碼效率很好，壓縮率 10-20%，接近 f64 數據理論極限"
+    elif [ $(echo "$best_ratio < 35" | bc) -eq 1 ]; then
+        echo "[中等] 原始編碼尚可，壓縮率 20-35%，屬於典型科學數據表現"
+    elif [ $(echo "$best_ratio < 50" | bc) -eq 1 ]; then
+        echo "[普通] 原始編碼有改進空間，壓縮率 35-50%，可優化數據組織結構"
     else
-        echo "[需改進] 編碼效率較低，壓縮率低於 10%，建議檢查數據格式"
+        echo "[需改進] 原始編碼效率低，壓縮率高於 50%，存在明顯冗餘或格式問題"
     fi
     
     echo
@@ -111,36 +111,40 @@ echo "=========================================="
 echo
 echo "測試結果摘要："
 echo "- 分析了 $total_files 個 dat 檔案"
-echo "- 最佳壓縮率: ${overall_best_ratio}%"
+echo "- 最高壓縮率: ${overall_highest_ratio}% (代表原始編碼效率最低的檔案)"
 echo
 
-# 根據實際結果給出具體評估 (針對完整 f64 精度需求)
-if [ $(echo "$overall_best_ratio > 50" | bc) -eq 1 ]; then
+# 根據最高壓縮率評估 (保守策略，關注編碼效率最低的檔案)
+if [ $(echo "$overall_highest_ratio < 10" | bc) -eq 1 ]; then
     echo "[整體評估: 優秀]"
-    echo "你的 dat 檔案編碼非常高效，在保持完整 f64 精度的前提下達到了很好的壓縮效果。"
+    echo "你的 dat 檔案編碼已達到極高效率，幾乎達到 f64 數據的理論壓縮極限。"
     echo "建議: 保持現有格式，專注於讀寫效能優化和並行處理。"
-elif [ $(echo "$overall_best_ratio > 35" | bc) -eq 1 ]; then
+elif [ $(echo "$overall_highest_ratio < 20" | bc) -eq 1 ]; then
     echo "[整體評估: 良好]"
-    echo "你的 dat 檔案編碼效率不錯，對於完整 f64 精度資料來說表現良好。"
-    echo "建議: 可考慮添加可選的即時壓縮功能，或優化檔案結構減少元數據開銷。"
-elif [ $(echo "$overall_best_ratio > 20" | bc) -eq 1 ]; then
+    echo "你的 dat 檔案編碼效率很好，已接近 f64 數據的理論壓縮極限。"
+    echo "建議: 當前編碼已很優秀，可考慮在此基礎上優化存取模式和緩存策略。"
+elif [ $(echo "$overall_highest_ratio < 35" | bc) -eq 1 ]; then
     echo "[整體評估: 中等]"
-    echo "你的 dat 檔案編碼效率尚可，這在完整 f64 精度要求下是可接受的。"
+    echo "你的 dat 檔案編碼效率屬於典型科學數據表現，在合理範圍內。"
+    echo "注意: 較小的檔案通常壓縮效率較低，這是正常現象。"
     echo "建議: 可考慮區塊壓縮、差分編碼或重新排列數據以提高局部性。"
-elif [ $(echo "$overall_best_ratio > 10" | bc) -eq 1 ]; then
+elif [ $(echo "$overall_highest_ratio < 50" | bc) -eq 1 ]; then
     echo "[整體評估: 普通]"
-    echo "你的 dat 檔案編碼有改進空間，但對於完整 f64 精度需求仍在合理範圍內。"
+    echo "你的 dat 檔案編碼有明顯改進空間，可通過優化獲得更好效率。"
     echo "建議: 評估數據分佈特性，考慮特化的浮點數編碼方案或內建壓縮。"
 else
     echo "[整體評估: 需要改進]"
-    echo "你的 dat 檔案編碼效率較低，即使考慮完整 f64 精度需求也有很大改進空間。"
+    echo "你的 dat 檔案編碼效率較低，存在明顯冗餘或格式設計問題。"
     echo "建議: 檢查檔案格式設計，考慮專用的科學數據格式如 HDF5 或 NetCDF。"
 fi
 
 echo
 echo "編碼品質參考標準 (針對完整 f64 精度二進制浮點數資料)："
-echo "- 壓縮率 > 50%: 優秀 (在保持完整精度下表現卓越)"
-echo "- 壓縮率 35-50%: 良好 (對 f64 完整精度資料表現良好)"
-echo "- 壓縮率 20-35%: 中等 (f64 完整精度下可接受)"
-echo "- 壓縮率 10-20%: 普通 (有改進空間但仍合理)"
-echo "- 壓縮率 < 10%: 需改進 (即使對 f64 也效率偏低)"
+echo "說明: f64 浮點數理論上難以高效壓縮，典型科學數據壓縮率在 15-25% 範圍"
+echo "注意: 壓縮率越低代表原始編碼越高效，因為壓縮工具找不到太多可壓縮的空間"
+echo
+echo "- 壓縮率 < 10%: 優秀 (原始編碼極高效，幾乎無法進一步壓縮)"
+echo "- 壓縮率 10-20%: 良好 (編碼效率很好，接近 f64 數據理論極限)"
+echo "- 壓縮率 20-35%: 中等 (編碼效率尚可，典型科學數據表現)"
+echo "- 壓縮率 35-50%: 普通 (有明顯改進空間，可優化數據組織)"
+echo "- 壓縮率 > 50%: 需改進 (編碼效率低，存在大量冗餘或格式問題)"
