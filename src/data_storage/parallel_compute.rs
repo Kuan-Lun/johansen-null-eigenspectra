@@ -7,20 +7,6 @@ use crate::johansen_models::JohansenModel;
 use crate::johansen_statistics::calculate_eigenvalues;
 use rayon::prelude::*;
 use std::sync::mpsc;
-use std::thread;
-
-/// 啟動統計收集執行緒
-fn spawn_statistics_collector(
-    statistics_receiver: mpsc::Receiver<f64>,
-) -> thread::JoinHandle<Vec<f64>> {
-    thread::spawn(move || {
-        let mut eigenvalue_sums = Vec::new();
-        while let Ok(sum) = statistics_receiver.recv() {
-            eigenvalue_sums.push(sum);
-        }
-        eigenvalue_sums
-    })
-}
 
 /// 使用指定seeds進行並行計算
 fn calculate_eigenvalues_parallel(
@@ -29,7 +15,6 @@ fn calculate_eigenvalues_parallel(
     seeds: &[u32],
     model: JohansenModel,
     sender: mpsc::Sender<(u32, Vec<f64>)>,
-    statistics_sender: mpsc::Sender<f64>,
     quiet: bool,
 ) {
     let chunk_size = BATCH_SIZE;
@@ -44,16 +29,10 @@ fn calculate_eigenvalues_parallel(
         // 並行計算這個chunk的結果
         chunk_seeds.into_par_iter().for_each(|&seed| {
             let eigenvalues = calculate_eigenvalues(dim, steps, seed, model);
-            let eigenvalue_sum = eigenvalues.iter().sum::<f64>();
 
             // 發送結果給寫入執行緒
             if sender.send((seed, eigenvalues)).is_err() && !quiet {
                 eprintln!("Failed to send results to writer thread");
-            }
-
-            // 發送統計資料
-            if statistics_sender.send(eigenvalue_sum).is_err() && !quiet {
-                eprintln!("Failed to send statistics data");
             }
         });
     }
@@ -83,21 +62,6 @@ fn validate_output_file(filename: &str, expected_count: usize) {
                 println!("ERROR: failed to read append file: {e}");
             }
         }
-    }
-}
-
-/// 輸出百分位數統計資訊
-fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) {
-    println!(
-        "Total calculated {} eigenvalue sums",
-        format_number_with_commas(sorted_eigenvalues.len())
-    );
-
-    // 輸出各個百分位數
-    for &percentile in percentiles {
-        let index = ((sorted_eigenvalues.len() as f64) * percentile) as usize;
-        let value = sorted_eigenvalues[index.min(sorted_eigenvalues.len() - 1)];
-        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
     }
 }
 
@@ -160,7 +124,6 @@ pub fn run_model_simulation(
 
             // 設置 channels
             let (sender, receiver) = mpsc::channel::<(u32, Vec<f64>)>();
-            let (statistics_sender, statistics_receiver) = mpsc::channel::<f64>();
 
             // 啟動支援斷點續傳的寫入執行緒
             let writer_config = crate::data_storage::thread_manager::WriterConfig {
@@ -173,18 +136,9 @@ pub fn run_model_simulation(
                 quiet,
             };
             let writer_handle = spawn_append_writer_thread(writer_config, receiver);
-            let statistics_handle = spawn_statistics_collector(statistics_receiver);
 
             // 執行剩餘的並行計算
-            calculate_eigenvalues_parallel(
-                dim,
-                steps,
-                &remaining_seeds,
-                model,
-                sender,
-                statistics_sender,
-                quiet,
-            );
+            calculate_eigenvalues_parallel(dim, steps, &remaining_seeds, model, sender, quiet);
 
             // 等待寫入執行緒完成
             match writer_handle.join() {
@@ -198,22 +152,6 @@ pub fn run_model_simulation(
                 }
                 Err(_) => {
                     panic!("Writer thread panic");
-                }
-            }
-
-            // 收集並處理統計資料
-            match statistics_handle.join() {
-                Ok(mut eigenvalue_sums) => {
-                    if !eigenvalue_sums.is_empty() && !quiet {
-                        eigenvalue_sums.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                        let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
-                        print_percentile_statistics(&eigenvalue_sums, &percentiles);
-                    }
-                }
-                Err(_) => {
-                    if !quiet {
-                        eprintln!("Statistics thread panic");
-                    }
                 }
             }
 

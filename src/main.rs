@@ -12,6 +12,58 @@ use display_utils::{format_duration, format_number_with_commas};
 use johansen_models::JohansenModel;
 use std::time::Instant;
 
+/// 輸出百分位數統計資訊
+fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) {
+    println!(
+        "Total calculated {} eigenvalue sums",
+        format_number_with_commas(sorted_eigenvalues.len())
+    );
+
+    // 輸出各個百分位數
+    for &percentile in percentiles {
+        let index = ((sorted_eigenvalues.len() as f64) * percentile) as usize;
+        let value = sorted_eigenvalues[index.min(sorted_eigenvalues.len() - 1)];
+        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
+    }
+}
+
+/// 從已有的數據文件中收集和分析統計信息
+fn analyze_simulation_statistics(
+    simulation: &EigenvalueSimulation,
+    models: &[JohansenModel],
+    quiet: bool,
+) {
+    if quiet {
+        return;
+    }
+
+    let mut total_eigenvalue_sums = Vec::new();
+
+    for &model in models {
+        match simulation.read_data(model) {
+            Ok(data) => {
+                if !data.is_empty() {
+                    let eigenvalue_sums: Vec<f64> = data
+                        .iter()
+                        .map(|(_, eigenvalues)| eigenvalues.iter().sum())
+                        .collect();
+
+                    total_eigenvalue_sums.extend(eigenvalue_sums);
+                }
+            }
+            Err(_) => {
+                // 如果讀取失敗，忽略這個模型
+            }
+        }
+    }
+
+    if !total_eigenvalue_sums.is_empty() {
+        total_eigenvalue_sums.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
+        print_percentile_statistics(&total_eigenvalue_sums, &percentiles);
+    }
+}
+
 fn main() {
     // 解析命令行參數
     let args = match CliArgs::parse() {
@@ -66,6 +118,11 @@ fn main() {
         } else {
             EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation(&models_vec);
         }
+
+        // 收集並顯示統計數據
+        let simulation = EigenvalueSimulation::new(dim, args.steps, args.num_runs);
+        analyze_simulation_statistics(&simulation, &models_vec, args.quiet);
+
         let elapsed_time = start_time.elapsed();
         conditional_println!(
             args.quiet,
