@@ -110,18 +110,6 @@ pub fn run_model_simulation(
     model: JohansenModel,
     quiet: bool,
 ) {
-    run_single_model_simulation(dim, steps, num_runs, get_filename_fn, model, quiet);
-}
-
-/// 支援斷點續傳的單一模型模擬計算（內部實現）
-fn run_single_model_simulation(
-    dim: usize,
-    steps: usize,
-    num_runs: usize,
-    get_filename_fn: impl Fn(JohansenModel) -> String,
-    model: JohansenModel,
-    quiet: bool,
-) {
     if !quiet {
         println!("Using model: {model} (supports resuming from checkpoint)");
     }
