@@ -68,9 +68,12 @@ Document AI agent interactions, configurations, and best practices for maintaini
 - Follow conventional branch naming patterns (e.g., `feature/`, `fix/`, `refactor/`)
 - Use descriptive but concise branch names
 - Follow commit message format consistent with recent 30 commits in the repository
-- Review existing commit history to maintain consistent messaging style (use `git log --oneline -30` and `git log -15` for detailed messages)
-- Compare file differences before committing to understand the changes made
-- Write commit messages based on the actual file differences and modifications
+- Before writing commit messages, execute the following commands in sequence:
+  1. `git log --oneline -30` - Understand the overall commit message format and style patterns
+  2. `git log -15` - Study detailed commit message writing techniques and conventions
+  3. `git status` - Confirm the list of changed files and their status
+  4. `git diff <file>` - Examine specific changes in each file to be committed
+- Write commit messages based on the actual file differences and modifications discovered through git diff
 - When multiple files are modified, categorize changes using Conventional Commits and make separate commits
 - Group related changes by type (feat, fix, docs, style, refactor, test, chore) for atomic commits
 - Always include scope in commit messages using format: `<type>[scope]: <description>`
