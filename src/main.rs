@@ -108,19 +108,37 @@ fn main() {
             format_number_with_commas(args.steps),
             format_number_with_commas(args.num_runs)
         );
+
+        // 輸出配置信息（僅在非安靜模式下）
+        if !args.quiet {
+            println!(
+                "Starting large-scale eigenvalue simulation (supports resuming from checkpoint)..."
+            );
+            println!(
+                "Dimensions: {}, Steps: {}, Runs: {}",
+                format_number_with_commas(dim),
+                format_number_with_commas(args.steps),
+                format_number_with_commas(args.num_runs)
+            );
+        }
+
         let models_vec = args
             .models
             .clone()
             .unwrap_or_else(|| JohansenModel::all_models().to_vec());
-        if args.quiet {
-            EigenvalueSimulation::new(dim, args.steps, args.num_runs)
-                .run_simulation_quiet(&models_vec);
-        } else {
-            EigenvalueSimulation::new(dim, args.steps, args.num_runs).run_simulation(&models_vec);
+
+        let simulation = EigenvalueSimulation::new(dim, args.steps, args.num_runs);
+
+        // 對每個模型運行模擬
+        for &model in &models_vec {
+            if args.quiet {
+                simulation.run_simulation_quiet(model);
+            } else {
+                simulation.run_simulation(model);
+            }
         }
 
         // 收集並顯示統計數據
-        let simulation = EigenvalueSimulation::new(dim, args.steps, args.num_runs);
         analyze_simulation_statistics(&simulation, &models_vec, args.quiet);
 
         let elapsed_time = start_time.elapsed();

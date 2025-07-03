@@ -4,7 +4,6 @@
 
 use super::parallel_compute::run_model_simulation;
 use super::reader::read_append_file;
-use crate::display_utils::format_number_with_commas;
 use crate::johansen_models::JohansenModel;
 
 /// 讀取所有數據的結果類型別名
@@ -33,41 +32,29 @@ impl EigenvalueSimulation {
     }
 
     /// 運行支援斷點續傳的大規模特徵值計算並保存結果
-    /// 這是主要的模擬運算接口，會對所有模型進行計算
-    pub fn run_simulation(&self, models: &[JohansenModel]) {
-        self.run_simulation_internal(models, false);
+    /// 這是主要的模擬運算接口，針對單一模型進行計算
+    pub fn run_simulation(&self, model: JohansenModel) {
+        run_model_simulation(
+            self.dim,
+            self.steps,
+            self.num_runs,
+            |m| self.get_filename(m),
+            model,
+            false,
+        );
     }
 
     /// 運行模擬（安靜模式）
     /// 不輸出進度信息，適合在批量處理或測試環境中使用
-    pub fn run_simulation_quiet(&self, models: &[JohansenModel]) {
-        self.run_simulation_internal(models, true);
-    }
-
-    /// 內部運行方法
-    fn run_simulation_internal(&self, models: &[JohansenModel], quiet: bool) {
-        if !quiet {
-            println!(
-                "Starting large-scale eigenvalue simulation (supports resuming from checkpoint)..."
-            );
-            println!(
-                "Dimensions: {}, Steps: {}, Runs: {}",
-                format_number_with_commas(self.dim),
-                format_number_with_commas(self.steps),
-                format_number_with_commas(self.num_runs)
-            );
-        }
-
-        for &model in models {
-            run_model_simulation(
-                self.dim,
-                self.steps,
-                self.num_runs,
-                |m| self.get_filename(m),
-                model,
-                quiet,
-            );
-        }
+    pub fn run_simulation_quiet(&self, model: JohansenModel) {
+        run_model_simulation(
+            self.dim,
+            self.steps,
+            self.num_runs,
+            |m| self.get_filename(m),
+            model,
+            true,
+        );
     }
 
     /// 從追加格式讀取指定模型的特徵值數據（包含seed）

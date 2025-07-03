@@ -86,7 +86,9 @@ fn test_basic_simulation_api() {
     assert!(filename.contains("_5.dat"));
 
     // 運行模擬
-    simulation.run_simulation_quiet(&JohansenModel::all_models());
+    for &model in &JohansenModel::all_models() {
+        simulation.run_simulation_quiet(model);
+    }
 
     // 檢查檔案是否存在
     assert!(std::path::Path::new(&filename).exists());
@@ -125,7 +127,9 @@ fn test_read_all_data() {
     }
 
     // 確保有一些數據
-    simulation.run_simulation_quiet(&JohansenModel::all_models());
+    for &model in &JohansenModel::all_models() {
+        simulation.run_simulation_quiet(model);
+    }
 
     let all_data = simulation.read_all_data();
     assert_eq!(all_data.len(), 5); // 5個模型
@@ -252,7 +256,9 @@ fn test_multiple_models() {
     }
 
     // 運行所有模型的計算
-    simulation.run_simulation_quiet(&JohansenModel::all_models());
+    for &model in &JohansenModel::all_models() {
+        simulation.run_simulation_quiet(model);
+    }
 
     // 檢查每個模型都有對應的檔案
     for model in JohansenModel::all_models() {
@@ -284,7 +290,9 @@ fn test_edge_cases() {
     let tiny_simulation = EigenvalueSimulation::new(2, 11, 1);
     let model = JohansenModel::NoInterceptNoTrend;
 
-    tiny_simulation.run_simulation_quiet(&JohansenModel::all_models());
+    for &model in &JohansenModel::all_models() {
+        tiny_simulation.run_simulation_quiet(model);
+    }
     let data = tiny_simulation.read_data(model).unwrap();
     assert_eq!(data.len(), 1);
     assert_eq!(data[0].0, 1); // seed 應該是 1
@@ -317,7 +325,9 @@ fn test_data_integrity() {
     // 清理並運行
     let filename = simulation.get_filename(model);
     let _ = std::fs::remove_file(&filename);
-    simulation.run_simulation_quiet(&JohansenModel::all_models());
+    for &model in &JohansenModel::all_models() {
+        simulation.run_simulation_quiet(model);
+    }
 
     // 檢查檔案是否被創建
     assert!(
