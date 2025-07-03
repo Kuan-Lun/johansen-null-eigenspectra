@@ -13,6 +13,8 @@ pub type AllDataResult = Vec<(JohansenModel, std::io::Result<Vec<(u32, Vec<f64>)
 /// 封裝所有模擬參數，提供統一的運算和讀取接口
 #[derive(Debug, Clone)]
 pub struct EigenvalueSimulation {
+    /// 約翰森模型
+    pub model: JohansenModel,
     /// 矩陣維度
     pub dim: usize,
     /// 時間步驟數
@@ -23,8 +25,9 @@ pub struct EigenvalueSimulation {
 
 impl EigenvalueSimulation {
     /// 創建新的特徵值模擬配置
-    pub fn new(dim: usize, steps: usize, num_runs: usize) -> Self {
+    pub fn new(model: JohansenModel, dim: usize, steps: usize, num_runs: usize) -> Self {
         Self {
+            model,
             dim,
             steps,
             num_runs,
@@ -33,34 +36,20 @@ impl EigenvalueSimulation {
 
     /// 運行支援斷點續傳的大規模特徵值計算並保存結果
     /// 這是主要的模擬運算接口，針對單一模型進行計算
-    pub fn run_simulation(&self, model: JohansenModel) {
-        run_model_simulation(
-            self.dim,
-            self.steps,
-            self.num_runs,
-            |m| self.get_filename(m),
-            model,
-            false,
-        );
+    pub fn run_simulation(&self) {
+        run_model_simulation(self, false);
     }
 
     /// 運行模擬（安靜模式）
     /// 不輸出進度信息，適合在批量處理或測試環境中使用
-    pub fn run_simulation_quiet(&self, model: JohansenModel) {
-        run_model_simulation(
-            self.dim,
-            self.steps,
-            self.num_runs,
-            |m| self.get_filename(m),
-            model,
-            true,
-        );
+    pub fn run_simulation_quiet(&self) {
+        run_model_simulation(self, true);
     }
 
     /// 從追加格式讀取指定模型的特徵值數據（包含seed）
     /// 注意：返回的數據可能無序，如需有序請自行排序
-    pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
-        let filename = self.get_filename(model);
+    pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
+        let filename = self.get_filename(self.model);
         read_append_file(&filename).map(|(data, _model, _dim, _steps)| data)
     }
 
@@ -68,11 +57,14 @@ impl EigenvalueSimulation {
     pub fn read_all_data(&self) -> AllDataResult {
         JohansenModel::all_models()
             .into_iter()
-            .map(|model| (model, self.read_data(model)))
+            .map(|model| {
+                let sim = EigenvalueSimulation::new(model, self.dim, self.steps, self.num_runs);
+                (model, sim.read_data())
+            })
             .collect()
     }
 
-    /// 獲取指定模型的檔案名稱
+    /// 獲取當前模型的檔案名稱
     ///
     /// 這是唯一的檔案命名入口點。所有內部檔案操作都通過此方法獲取檔案名稱，
     /// 確保檔案命名邏輯的一致性。如果需要自定義檔案命名規則，

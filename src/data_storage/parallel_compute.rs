@@ -1,6 +1,7 @@
 use super::config::BATCH_SIZE;
 use super::progress::{check_append_progress, get_remaining_seeds};
 use super::reader::read_append_file;
+use super::simulation::EigenvalueSimulation;
 use super::thread_manager::spawn_append_writer_thread;
 use crate::display_utils::format_number_with_commas;
 use crate::johansen_models::JohansenModel;
@@ -66,24 +67,25 @@ fn validate_output_file(filename: &str, expected_count: usize) {
 }
 
 /// 支援斷點續傳的單一模型模擬計算
-pub fn run_model_simulation(
-    dim: usize,
-    steps: usize,
-    num_runs: usize,
-    get_filename_fn: impl Fn(JohansenModel) -> String,
-    model: JohansenModel,
-    quiet: bool,
-) {
+pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
     if !quiet {
-        println!("Using model: {model} (supports resuming from checkpoint)");
+        println!(
+            "Using model: {} (supports resuming from checkpoint)",
+            simulation.model
+        );
     }
 
-    let filename = get_filename_fn(model);
+    let filename = simulation.get_filename(simulation.model);
 
     // 檢查已完成的進度
-    match check_append_progress(&filename, model.to_number(), dim as u8, steps as u32) {
+    match check_append_progress(
+        &filename,
+        simulation.model.to_number(),
+        simulation.dim as u8,
+        simulation.steps as u32,
+    ) {
         Ok((completed_runs, completed_seeds)) => {
-            if completed_runs >= num_runs {
+            if completed_runs >= simulation.num_runs {
                 if !quiet {
                     println!("SUCCESS: calculation for this model already completed, skipping");
                 }
@@ -97,7 +99,7 @@ pub fn run_model_simulation(
                     println!(
                         "Detected {} completed out of {} calculations, Seeds range: {}-{}",
                         format_number_with_commas(completed_runs),
-                        format_number_with_commas(num_runs),
+                        format_number_with_commas(simulation.num_runs),
                         format_number_with_commas(min_completed_seed as usize),
                         format_number_with_commas(max_completed_seed as usize)
                     );
@@ -105,7 +107,7 @@ pub fn run_model_simulation(
             }
 
             // 獲取剩餘的seed
-            let remaining_seeds = get_remaining_seeds(num_runs, &completed_seeds);
+            let remaining_seeds = get_remaining_seeds(simulation.num_runs, &completed_seeds);
             let remaining_count = remaining_seeds.len();
 
             if remaining_count == 0 {
@@ -128,17 +130,24 @@ pub fn run_model_simulation(
             // 啟動支援斷點續傳的寫入執行緒
             let writer_config = crate::data_storage::thread_manager::WriterConfig {
                 filename: filename.clone(),
-                total_runs: num_runs,
+                total_runs: simulation.num_runs,
                 completed_runs,
-                dim,
-                steps,
-                model,
+                dim: simulation.dim,
+                steps: simulation.steps,
+                model: simulation.model,
                 quiet,
             };
             let writer_handle = spawn_append_writer_thread(writer_config, receiver);
 
             // 執行剩餘的並行計算
-            calculate_eigenvalues_parallel(dim, steps, &remaining_seeds, model, sender, quiet);
+            calculate_eigenvalues_parallel(
+                simulation.dim,
+                simulation.steps,
+                &remaining_seeds,
+                simulation.model,
+                sender,
+                quiet,
+            );
 
             // 等待寫入執行緒完成
             match writer_handle.join() {
@@ -157,7 +166,7 @@ pub fn run_model_simulation(
 
             // 驗證檔案輸出
             if !quiet {
-                validate_output_file(&filename, num_runs);
+                validate_output_file(&filename, simulation.num_runs);
             }
         }
         Err(e) => {
@@ -182,7 +191,7 @@ pub fn run_model_simulation(
                     println!("Starting fresh calculation with correct parameters...");
                 }
                 // 重新調用自己來重新開始計算
-                return run_model_simulation(dim, steps, num_runs, get_filename_fn, model, quiet);
+                return run_model_simulation(simulation, quiet);
             } else {
                 panic!("Failed to check progress: {e}");
             }

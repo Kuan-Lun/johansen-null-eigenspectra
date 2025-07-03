@@ -1,5 +1,4 @@
 use johansen_null_eigenspectra::data_storage::EigenvalueSimulation;
-use johansen_null_eigenspectra::data_storage::parallel_compute::run_model_simulation;
 use johansen_null_eigenspectra::data_storage::writer::AppendOnlyWriter;
 use johansen_null_eigenspectra::johansen_models::JohansenModel;
 
@@ -40,7 +39,7 @@ fn remove_seed_from_file(
     }
 
     // 讀取現有數據並排序
-    let mut data = simulation.read_data(model)?;
+    let mut data = simulation.read_data()?;
     data.sort_by_key(|(seed, _)| *seed);
     let original_count = data.len();
 
@@ -73,8 +72,8 @@ fn remove_seed_from_file(
 #[test]
 fn test_basic_simulation_api() {
     // 使用唯一的參數組合避免與其他測試檔案衝突
-    let simulation = EigenvalueSimulation::new(2, 101, 5);
     let model = JohansenModel::NoInterceptNoTrend;
+    let simulation = EigenvalueSimulation::new(model, 2, 101, 5);
     let filename = simulation.get_filename(model);
 
     // 清理現有檔案
@@ -87,14 +86,15 @@ fn test_basic_simulation_api() {
 
     // 運行模擬
     for &model in &JohansenModel::all_models() {
-        simulation.run_simulation_quiet(model);
+        let model_simulation = EigenvalueSimulation::new(model, 2, 101, 5);
+        model_simulation.run_simulation_quiet();
     }
 
     // 檢查檔案是否存在
     assert!(std::path::Path::new(&filename).exists());
 
     // 讀取數據
-    let data = simulation.read_data(model).unwrap();
+    let data = simulation.read_data().unwrap();
     assert_eq!(data.len(), 5);
 
     // 檢查每筆數據格式
@@ -104,7 +104,7 @@ fn test_basic_simulation_api() {
     }
 
     // 測試排序功能
-    let mut sorted_data = simulation.read_data(model).unwrap();
+    let mut sorted_data = simulation.read_data().unwrap();
     sorted_data.sort_by_key(|(seed, _)| *seed);
     assert_eq!(sorted_data.len(), 5);
     for i in 1..sorted_data.len() {
@@ -118,17 +118,20 @@ fn test_basic_simulation_api() {
 #[test]
 fn test_read_all_data() {
     // 使用唯一的參數組合避免與其他測試檔案衝突
-    let simulation = EigenvalueSimulation::new(3, 52, 3);
+    let model = JohansenModel::NoInterceptNoTrend;
+    let simulation = EigenvalueSimulation::new(model, 3, 52, 3);
 
     // 清理所有現有檔案
-    for model in JohansenModel::all_models() {
-        let filename = simulation.get_filename(model);
+    for test_model in JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 3, 52, 3);
+        let filename = test_simulation.get_filename(test_model);
         let _ = std::fs::remove_file(&filename);
     }
 
     // 確保有一些數據
-    for &model in &JohansenModel::all_models() {
-        simulation.run_simulation_quiet(model);
+    for &test_model in &JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 3, 52, 3);
+        test_simulation.run_simulation_quiet();
     }
 
     let all_data = simulation.read_all_data();
@@ -159,24 +162,17 @@ fn test_read_all_data() {
 #[test]
 fn test_resumable_functionality() {
     // 使用唯一的參數組合避免與其他測試檔案衝突
-    let simulation = EigenvalueSimulation::new(2, 103, 5);
     let model = JohansenModel::NoInterceptNoTrend;
+    let simulation = EigenvalueSimulation::new(model, 2, 103, 5);
     let filename = simulation.get_filename(model);
 
     // 清理現有檔案
     let _ = std::fs::remove_file(&filename);
 
     // 首次運行完整計算 - 只運行指定模型
-    run_model_simulation(
-        simulation.dim,
-        simulation.steps,
-        simulation.num_runs,
-        |m| simulation.get_filename(m),
-        model,
-        true, // quiet
-    );
+    simulation.run_simulation_quiet();
 
-    let mut data = simulation.read_data(model).unwrap();
+    let mut data = simulation.read_data().unwrap();
     data.sort_by_key(|(seed, _)| *seed);
     assert_eq!(data.len(), 5);
 
@@ -192,7 +188,7 @@ fn test_resumable_functionality() {
     assert_eq!(removed_count, 2);
 
     // 檢查移除後的數據
-    let mut data_after_removal = simulation.read_data(model).unwrap();
+    let mut data_after_removal = simulation.read_data().unwrap();
     data_after_removal.sort_by_key(|(seed, _)| *seed);
     assert_eq!(data_after_removal.len(), 3);
 
@@ -202,17 +198,10 @@ fn test_resumable_functionality() {
     }
 
     // 運行斷點續傳 - 只運行指定模型
-    run_model_simulation(
-        simulation.dim,
-        simulation.steps,
-        simulation.num_runs,
-        |m| simulation.get_filename(m),
-        model,
-        true, // quiet
-    );
+    simulation.run_simulation_quiet();
 
     // 檢查最終結果
-    let mut final_data = simulation.read_data(model).unwrap();
+    let mut final_data = simulation.read_data().unwrap();
     final_data.sort_by_key(|(seed, _)| *seed);
     assert_eq!(final_data.len(), 5);
 
@@ -247,25 +236,29 @@ fn test_resumable_functionality() {
 #[test]
 fn test_multiple_models() {
     // 使用唯一的參數組合避免與其他測試檔案衝突
-    let simulation = EigenvalueSimulation::new(2, 54, 3);
+    let model = JohansenModel::NoInterceptNoTrend;
+    let simulation = EigenvalueSimulation::new(model, 2, 54, 3);
 
     // 清理所有現有檔案
-    for model in JohansenModel::all_models() {
-        let filename = simulation.get_filename(model);
+    for test_model in JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 2, 54, 3);
+        let filename = test_simulation.get_filename(test_model);
         let _ = std::fs::remove_file(&filename);
     }
 
     // 運行所有模型的計算
-    for &model in &JohansenModel::all_models() {
-        simulation.run_simulation_quiet(model);
+    for &test_model in &JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 2, 54, 3);
+        test_simulation.run_simulation_quiet();
     }
 
     // 檢查每個模型都有對應的檔案
-    for model in JohansenModel::all_models() {
-        let filename = simulation.get_filename(model);
+    for test_model in JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 2, 54, 3);
+        let filename = test_simulation.get_filename(test_model);
         assert!(std::path::Path::new(&filename).exists());
 
-        let data = simulation.read_data(model).unwrap();
+        let data = test_simulation.read_data().unwrap();
         assert_eq!(data.len(), 3);
 
         // 檢查數據格式
@@ -287,13 +280,14 @@ fn test_multiple_models() {
 #[test]
 fn test_edge_cases() {
     // 測試非常小的模擬，使用唯一的參數組合
-    let tiny_simulation = EigenvalueSimulation::new(2, 11, 1);
     let model = JohansenModel::NoInterceptNoTrend;
+    let tiny_simulation = EigenvalueSimulation::new(model, 2, 11, 1);
 
-    for &model in &JohansenModel::all_models() {
-        tiny_simulation.run_simulation_quiet(model);
+    for &test_model in &JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 2, 11, 1);
+        test_simulation.run_simulation_quiet();
     }
-    let data = tiny_simulation.read_data(model).unwrap();
+    let data = tiny_simulation.read_data().unwrap();
     assert_eq!(data.len(), 1);
     assert_eq!(data[0].0, 1); // seed 應該是 1
 
@@ -304,11 +298,10 @@ fn test_edge_cases() {
 
 #[test]
 fn test_filename_consistency() {
-    let simulation = EigenvalueSimulation::new(3, 500, 1000);
-
     // 測試不同模型的檔案名稱
-    for (i, model) in JohansenModel::all_models().iter().enumerate() {
-        let filename = simulation.get_filename(*model);
+    for (i, test_model) in JohansenModel::all_models().iter().enumerate() {
+        let test_simulation = EigenvalueSimulation::new(*test_model, 3, 500, 1000);
+        let filename = test_simulation.get_filename(*test_model);
         assert!(filename.contains(&format!("model{}", i)));
         assert!(filename.contains("dim3"));
         assert!(filename.contains("steps500"));
@@ -319,14 +312,15 @@ fn test_filename_consistency() {
 #[test]
 fn test_data_integrity() {
     // 使用唯一的參數組合避免與其他測試檔案衝突
-    let simulation = EigenvalueSimulation::new(2, 105, 5);
     let model = JohansenModel::NoInterceptNoTrend;
+    let simulation = EigenvalueSimulation::new(model, 2, 105, 5);
 
     // 清理並運行
     let filename = simulation.get_filename(model);
     let _ = std::fs::remove_file(&filename);
-    for &model in &JohansenModel::all_models() {
-        simulation.run_simulation_quiet(model);
+    for &test_model in &JohansenModel::all_models() {
+        let test_simulation = EigenvalueSimulation::new(test_model, 2, 105, 5);
+        test_simulation.run_simulation_quiet();
     }
 
     // 檢查檔案是否被創建
@@ -337,13 +331,13 @@ fn test_data_integrity() {
     );
 
     // 多次讀取，確保結果一致
-    let data1 = simulation.read_data(model).expect("第一次讀取應該成功");
-    let data2 = simulation.read_data(model).expect("第二次讀取應該成功");
+    let data1 = simulation.read_data().expect("第一次讀取應該成功");
+    let data2 = simulation.read_data().expect("第二次讀取應該成功");
 
     // 測試排序一致性
-    let mut sorted_data1 = simulation.read_data(model).expect("第一次排序讀取應該成功");
+    let mut sorted_data1 = simulation.read_data().expect("第一次排序讀取應該成功");
     sorted_data1.sort_by_key(|(seed, _)| *seed);
-    let mut sorted_data2 = simulation.read_data(model).expect("第二次排序讀取應該成功");
+    let mut sorted_data2 = simulation.read_data().expect("第二次排序讀取應該成功");
     sorted_data2.sort_by_key(|(seed, _)| *seed);
 
     assert_eq!(data1, data2);

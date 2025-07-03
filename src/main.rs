@@ -28,8 +28,8 @@ fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) 
 }
 
 /// 從已有的數據文件中收集和分析統計信息
-fn analyze_simulation_statistics(simulation: &EigenvalueSimulation, model: JohansenModel) {
-    match simulation.read_data(model) {
+fn analyze_simulation_statistics(simulation: &EigenvalueSimulation) {
+    match simulation.read_data() {
         Ok(data) => {
             if !data.is_empty() {
                 let eigenvalue_sums: Vec<f64> = data
@@ -40,7 +40,7 @@ fn analyze_simulation_statistics(simulation: &EigenvalueSimulation, model: Johan
                 let mut sorted_eigenvalue_sums = eigenvalue_sums;
                 sorted_eigenvalue_sums.sort_by(|a, b| a.partial_cmp(b).unwrap());
                 let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
-                println!("Statistics for model {model}:");
+                println!("Statistics for model {}:", simulation.model);
                 print_percentile_statistics(&sorted_eigenvalue_sums, &percentiles);
             }
         }
@@ -113,16 +113,15 @@ fn main() {
             .clone()
             .unwrap_or_else(|| JohansenModel::all_models().to_vec());
 
-        let simulation = EigenvalueSimulation::new(dim, args.steps, args.num_runs);
-
         // 對每個模型運行模擬
         for &model in &models_vec {
+            let simulation = EigenvalueSimulation::new(model, dim, args.steps, args.num_runs);
             if args.quiet {
-                simulation.run_simulation_quiet(model);
+                simulation.run_simulation_quiet();
             } else {
-                simulation.run_simulation(model);
+                simulation.run_simulation();
                 // 收集並顯示統計數據（在每個模型運行完後立即分析）
-                analyze_simulation_statistics(&simulation, model);
+                analyze_simulation_statistics(&simulation);
             }
         }
 
@@ -138,7 +137,8 @@ fn main() {
 
     // 讀取特定模型的數據
     conditional_println!(args.quiet, "Starting to read model data...");
-    let simulation = EigenvalueSimulation::new(args.dim_start, args.steps, args.num_runs);
+    let model = JohansenModel::NoInterceptNoTrend; // 使用無截距無趨勢模型作為範例
+    let simulation = EigenvalueSimulation::new(model, args.dim_start, args.steps, args.num_runs);
     conditional_println!(
         args.quiet,
         "Simulation config: {} dimensions, {} steps, {} runs",
@@ -146,8 +146,7 @@ fn main() {
         format_number_with_commas(simulation.steps),
         format_number_with_commas(simulation.num_runs)
     );
-    let model = JohansenModel::NoInterceptNoTrend; // 使用無截距無趨勢模型作為範例
-    match simulation.read_data(model) {
+    match simulation.read_data() {
         Ok(data) => {
             conditional_println!(
                 args.quiet,
