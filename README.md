@@ -39,6 +39,41 @@ The binary accepts several options. The following list mirrors the help output f
 -v, --version        show version information
 ```
 
+## Theoretical Background
+
+The eigenvalues computed in this simulation correspond to the asymptotic null distribution of the Johansen cointegration test.
+
+### Theory
+
+The theoretical eigenvalues are the values of ρ that solve:
+
+```math
+\det {\left( \rho \int_{0}^{1} F F' d u - {\left( \int_{0}^{1} F (dB)' \right)} {\left( \int_{0}^{1} (d B) F' \right)} \right)} = 0
+```
+
+where:
+
+- $\det$ is the determinant operator
+- $B$ is a standard Brownian motion process (dimension corresponds to the `--dim` CLI parameter)
+- $F$ is constructed according to the specific Johansen model, following the definitions in Johansen, S. (1996). *Likelihood-Based Inference in Cointegrated Vector Autoregressive Models*. Oxford University Press, Oxford, 2nd edition, Subsection 15.1.
+
+### Implementation
+
+The estimated eigenvalues $\hat{\rho}$ are computed by solving the discrete approximation:
+
+```math
+\det {\left( \hat{\rho} \sum_{t=1}^{T} F_{t-1} F_{t-1}' - {\left( \sum_{t=1}^{T} F_{t-1} {\left( B_{t}-B_{t-1} \right)} ' \right)} {\left( \sum_{t=1}^{T} {\left( B_{t}-B_{t-1} \right)} F_{t-1}' \right)} \right)} = 0
+```
+
+where:
+
+- $T$ is the total number of simulation steps (corresponds to the `--steps` CLI parameter)
+- $B_{t}$ represents the discretized Brownian motion at time step $t$ (dimension = `--dim` parameter)
+- $F_{t}$ is the F matrix constructed from the Brownian motion at time step $t$
+- The construction of $F$ depends on the specific Johansen model being tested
+
+For detailed information about how the F matrix is constructed for each model, see [F_MATRIX.md](./F_MATRIX.md).
+
 ## Usage Examples
 
 This example runs the simulation for dimension 5 with 5,000 steps and 1,000,000 runs per model using 4 threads:
