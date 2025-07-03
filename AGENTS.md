@@ -13,7 +13,6 @@ Document AI agent interactions, configurations, and best practices for maintaini
 - Follow Rust best practices and conventions
 - Maintain consistency with existing codebase style
 - Ensure thread safety in parallel computations
-- Use appropriate error handling patterns
 - Write code comments in Chinese for internal documentation
 - Use English for all user-facing messages, error messages, and CLI output
 - Follow SOLID principles for clean and maintainable code design
@@ -36,7 +35,6 @@ Document AI agent interactions, configurations, and best practices for maintaini
 
 - Keep dependencies up to date and audit for vulnerabilities
 - Use minimal dependencies and prefer well-maintained crates
-- Avoid unnecessary external dependencies for core functionality
 - Review dependency licenses for compatibility
 
 ### Error Handling
@@ -67,15 +65,13 @@ Document AI agent interactions, configurations, and best practices for maintaini
 - Use English names for all branches (no Chinese characters)
 - Follow conventional branch naming patterns (e.g., `feature/`, `fix/`, `refactor/`)
 - Use descriptive but concise branch names
-- Follow commit message format consistent with recent 30 commits in the repository
 - Before writing commit messages, execute the following commands in sequence:
   1. `git log --oneline -30` - Understand the overall commit message format and style patterns
   2. `git log -15` - Study detailed commit message writing techniques and conventions
   3. `git status` - Confirm the list of changed files and their status
   4. `git diff <file>` - Examine specific changes in each file to be committed
 - Write commit messages based on the actual file differences and modifications discovered through git diff
-- When multiple files are modified, categorize changes using Conventional Commits and make separate commits
-- Group related changes by type (feat, fix, docs, style, refactor, test, chore) for atomic commits
+- When multiple files are modified, group related changes by type (feat, fix, docs, style, refactor, test, chore) for atomic commits
 - Always include scope in commit messages using format: `<type>[scope]: <description>`
 - Use meaningful scopes that indicate the affected module or component
 - For modifications involving multiple types, create a temporary branch first, complete all code changes, then merge back
