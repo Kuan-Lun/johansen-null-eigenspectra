@@ -16,3 +16,5 @@ COPY . .
 # 確保容器在啟動時自動從遠端倉庫更新代碼
 RUN git fetch origin && \
     git reset --hard origin/master
+
+RUN cargo fmt && cargo clean
