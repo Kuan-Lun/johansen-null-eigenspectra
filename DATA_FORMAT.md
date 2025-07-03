@@ -42,11 +42,11 @@ Each data record represents one Monte Carlo simulation result:
 
 | Offset | Size | Type | Description |
 |--------|------|------|-------------|
-| 0      | 4    | u32  | Random seed (little-endian) |
-| 4      | 1    | u8   | Number of eigenvalues |
-| 5      | 8×N  | f64  | N eigenvalues (8 bytes each, little-endian) |
+| 0      | 1-5  | ULEB128 | Random seed |
+| ?      | 1    | u8   | Number of eigenvalues |
+| ?      | 8×N  | f64  | N eigenvalues (8 bytes each, little-endian) |
 
-**Record size calculation**: `5 + 8 × number_of_eigenvalues` bytes
+**Record size calculation**: `ULEB128(seed) length + 1 + 8 × number_of_eigenvalues` bytes
 
 #### Eigenvalue Count Notes
 
@@ -66,17 +66,17 @@ Each data record represents one Monte Carlo simulation result:
 
 ```rust
 file_size = header_size + (record_size × record_count) + metadata_size
-          = 18 + (5 + 8 × eigenvalues_count) × record_count + 17
+          ≈ 18 + (5 + 8 × eigenvalues_count) × record_count + 17 // assume worst-case seed length
 ```
 
 ### Example Calculation
 
-For a 1-dimension, 10,000,000 simulation file:
+For a 1-dimension, 10,000,000 simulation file (seed fits in one byte):
 
 ```text
-file_size = 18 + (5 + 8×1) × 10,000,000 + 17
-          = 18 + 13 × 10,000,000 + 17  
-          = 130,000,035 bytes ≈ 124 MB
+file_size ≈ 18 + (2 + 8×1) × 10,000,000 + 17
+          = 18 + 10 × 10,000,000 + 17
+          = 100,000,035 bytes ≈ 95 MB
 ```
 
 ## Real-World Examples
@@ -97,12 +97,12 @@ Parsed:
 ### Data Record Example
 
 ```hex
-01 00 00 00 01 3F F0 00 00 00 00 00 00
+01 01 3F F0 00 00 00 00 00 00
 ```
 
 Parsed:
 
-- `01 00 00 00`: Seed = 1
+- `01`: Seed = 1 (ULEB128)
 - `01`: 1 eigenvalue
 - `3F F0 00 00 00 00 00 00`: Eigenvalue = 1.0
 

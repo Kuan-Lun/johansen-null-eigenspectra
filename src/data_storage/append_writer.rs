@@ -6,7 +6,7 @@
 use crate::display_utils::{format_number_with_commas, format_remaining_time};
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
@@ -16,6 +16,45 @@ use super::config::{
     WRITE_BUFFER_CAPACITY,
 };
 
+/// 將 u32 值寫成 ULEB128 編碼
+fn write_uleb128<W: Write>(writer: &mut W, mut value: u32) -> std::io::Result<()> {
+    loop {
+        let mut byte = (value & 0x7F) as u8;
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        writer.write_all(&[byte])?;
+        if value == 0 {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// 從讀取器以 ULEB128 解碼 u32
+fn read_uleb128<R: Read>(reader: &mut R) -> std::io::Result<u32> {
+    let mut result: u32 = 0;
+    let mut shift = 0;
+    loop {
+        let mut buf = [0u8; 1];
+        reader.read_exact(&mut buf)?;
+        let byte = buf[0];
+        result |= ((byte & 0x7F) as u32) << shift;
+        if (byte & 0x80) == 0 {
+            break;
+        }
+        shift += 7;
+        if shift >= 35 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "ULEB128 value too large",
+            ));
+        }
+    }
+    Ok(result)
+}
+
 /// 檔案格式常數
 const MAGIC_HEADER: &[u8] = b"EIGENVALS_V5"; // 12 bytes
 const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
@@ -23,7 +62,8 @@ const EOF_MARKER: &[u8] = b"EOF_MARK"; // 8 bytes
 /// 計算預期檔案大小以便預先配置磁碟空間
 pub fn calculate_expected_file_size(num_runs: usize, eigenvalues_per_run: usize) -> u64 {
     let header = MAGIC_HEADER.len() as u64 + 1 + 1 + 4; // magic + model(1) + dim(1) + steps(4)
-    let record_size = 4 + 1 + eigenvalues_per_run as u64 * 8; // seed: 4 bytes (u32), count: 1 byte (u8)
+    // seed 以 ULEB128 編碼，最多 5 bytes，預估使用最大值
+    let record_size = 5 + 1 + eigenvalues_per_run as u64 * 8; // seed(max 5) + count(1)
     let metadata = EOF_MARKER.len() as u64 + 8 + 1; // eof_marker + total_count + eigenvalues_per_run(u8)
     header + record_size * num_runs as u64 + metadata
 }
@@ -271,8 +311,8 @@ impl AppendOnlyWriter {
             }
         }
 
-        // 寫入數據塊：[seed: 4 bytes (u32)] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
-        self.writer.write_all(&seed.to_le_bytes())?;
+        // 寫入數據塊：[seed: ULEB128] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
+        write_uleb128(&mut self.writer, seed)?;
         self.writer
             .write_all(&(eigenvalues.len() as u8).to_le_bytes())?;
 
@@ -430,13 +470,11 @@ fn read_with_metadata(
     let mut data = Vec::with_capacity(total_count);
 
     for _ in 0..total_count {
-        let mut seed_buf = [0u8; 4]; // 改為 4 bytes (u32)
+        let seed = read_uleb128(reader)?;
         let mut count_buf = [0u8; 1]; // 1 byte (u8)
 
-        reader.read_exact(&mut seed_buf)?;
         reader.read_exact(&mut count_buf)?;
 
-        let seed = u32::from_le_bytes(seed_buf);
         let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
         let eigenvalue_count = eigenvalue_count_u8 as usize;
 
@@ -480,46 +518,29 @@ fn scan_read_data(reader: &mut BufReader<File>) -> std::io::Result<Vec<(u32, Vec
     let mut data = Vec::new();
 
     loop {
-        let mut seed_buf = [0u8; 4]; // 改為 4 bytes (u32)
-        let mut count_buf = [0u8; 1]; // 1 byte (u8)
-
-        // 嘗試讀取 seed
-        if reader.read_exact(&mut seed_buf).is_err() {
-            break; // 到達檔案末尾
-        }
-
-        // 檢查是否是 EOF 標記
-        // 由於 seed 現在是 4 bytes，而 EOF_MARKER 是 8 bytes，我們需要謹慎檢查
-        if seed_buf == [b'E', b'O', b'F', b'_'] {
-            // 可能是 EOF 標記的開始，檢查接下來的 4 字節
-            let mut remaining_eof = [0u8; 4];
-            if reader.read_exact(&mut remaining_eof).is_ok()
-                && remaining_eof == [b'M', b'A', b'R', b'K']
-            {
-                break; // 確認是 EOF 標記
-            } else {
-                // 不是完整的 EOF 標記，回退並繼續處理
-                reader.seek(SeekFrom::Current(-4))?;
+        {
+            let buf = reader.fill_buf()?;
+            if buf.is_empty() {
+                break;
+            }
+            if buf.len() >= EOF_MARKER.len() && &buf[..EOF_MARKER.len()] == EOF_MARKER {
+                break;
             }
         }
 
-        // 檢查是否是全零（預分配的空白區域）
-        if seed_buf == [0u8; 4] {
-            // 檢查後續是否也是零，如果是則認為到達了預分配的空白區域
-            if reader.read_exact(&mut count_buf).is_ok() && count_buf == [0u8; 1] {
-                break; // 遇到預分配的空白區域
-            } else {
-                // 如果不是全零的 count，則繼續處理（seed 為 0 是有效的）
-                reader.seek(SeekFrom::Current(-1))?; // 回退 count_buf (1 byte)
-            }
-        }
+        let seed = match read_uleb128(reader) {
+            Ok(s) => s,
+            Err(_) => break,
+        };
 
-        // 讀取特徵值數量
+        let mut count_buf = [0u8; 1];
         if reader.read_exact(&mut count_buf).is_err() {
-            break; // 不完整的數據塊
+            break;
         }
 
-        let seed = u32::from_le_bytes(seed_buf);
+        if seed == 0 && count_buf[0] == 0 {
+            break;
+        }
         let eigenvalue_count_u8 = u8::from_le_bytes(count_buf);
         let eigenvalue_count = eigenvalue_count_u8 as usize;
 
