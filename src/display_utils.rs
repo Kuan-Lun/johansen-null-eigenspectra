@@ -6,22 +6,14 @@ use std::time::Duration;
 
 /// 條件性輸出宏，根據 quiet 參數決定是否輸出
 ///
+/// **注意：這是內部實現的 macro，不是公開 API 的一部分**
+///
 /// # 參數
 /// * `quiet` - 是否安靜模式（true 時不輸出）
 /// * `fmt` - 格式化字串
 /// * `args` - 格式化參數
-///
-/// # 範例
-/// ```
-/// use johansen_null_eigenspectra::conditional_println;
-///
-/// let quiet = false;
-/// conditional_println!(quiet, "Hello, {}!", "world"); // 會輸出
-///
-/// let quiet = true;
-/// conditional_println!(quiet, "Hello, {}!", "world"); // 不會輸出
-/// ```
 #[macro_export]
+#[doc(hidden)]
 macro_rules! conditional_println {
     ($quiet:expr, $($arg:tt)*) => {
         if !$quiet {
@@ -32,20 +24,12 @@ macro_rules! conditional_println {
 
 /// 條件性空行輸出宏，根據 quiet 參數決定是否輸出空行
 ///
+/// **注意：這是內部實現的 macro，不是公開 API 的一部分**
+///
 /// # 參數
 /// * `quiet` - 是否安靜模式（true 時不輸出）
-///
-/// # 範例
-/// ```
-/// use johansen_null_eigenspectra::conditional_println_empty;
-///
-/// let quiet = false;
-/// conditional_println_empty!(quiet); // 會輸出空行
-///
-/// let quiet = true;
-/// conditional_println_empty!(quiet); // 不會輸出空行
-/// ```
 #[macro_export]
+#[doc(hidden)]
 macro_rules! conditional_println_empty {
     ($quiet:expr) => {
         if !$quiet {
