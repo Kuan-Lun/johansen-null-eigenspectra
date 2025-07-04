@@ -99,6 +99,42 @@ jobs:
         echo "Release files prepared:"
         ls -la release-files/
     
+    - name: Read release notes
+      id: release_notes
+      run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF_NAME#v}
+        RELEASE_NOTES_FILE=".github/releases/RELEASE_NOTES_v${VERSION}.md"
+        
+        echo "Looking for release notes file: $RELEASE_NOTES_FILE"
+        
+        if [ -f "$RELEASE_NOTES_FILE" ]; then
+          echo "Release notes file found, reading content..."
+          # Read the file content and handle multiline properly
+          {
+            echo 'RELEASE_BODY<<EOF'
+            cat "$RELEASE_NOTES_FILE"
+            echo EOF
+          } >> $GITHUB_OUTPUT
+        else
+          echo "Release notes file not found, using fallback content..."
+          {
+            echo 'RELEASE_BODY<<EOF'
+            echo "## What's New in ${{ github.ref_name }}"
+            echo ""
+            echo "Release notes for this version are not available."
+            echo ""
+            echo "### Installation"
+            echo ""
+            echo "Download the appropriate binary for your platform from the assets below."
+            echo ""
+            echo "### Usage & Documentation"
+            echo ""
+            echo "See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for detailed usage instructions, examples, and documentation."
+            echo EOF
+          } >> $GITHUB_OUTPUT
+        fi
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
@@ -106,36 +142,6 @@ jobs:
         draft: true
         prerelease: false
         name: "Release ${{ github.ref_name }}"
-        body: |
-          ## What's New in ${{ github.ref_name }}
-          
-          This is the **initial public release** of Johansen Null Eigenspectra.
-          
-          ### ✨ Features
-          
-          - High-performance Monte Carlo simulation for Johansen cointegration test eigenvalues
-          - Support for all 5 Johansen model types (0-4)
-          - Multi-threaded parallel computation using Rust and LAPACK
-          - Configurable simulation parameters (dimensions, steps, runs)
-          - Cross-platform binaries for Linux and macOS
-          - Data export to `.dat` files for further analysis
-          - Command-line interface with comprehensive options
-          
-          ### 📦 Installation
-          
-          Download the appropriate binary for your platform from the assets below.
-          
-          ### 📋 Usage & Documentation
-          
-          See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for detailed usage instructions, examples, and documentation.
-          
-          ### 🔧 Requirements
-          
-          **For pre-compiled binaries:**
-          - **Linux**: Requires system LAPACK/BLAS libraries (usually pre-installed or available via package manager)
-          - **macOS**: No additional dependencies (uses built-in Accelerate framework)
-          
-          **For building from source:**
-          - Rust toolchain, C compiler, and LAPACK development libraries
+        body: ${{ steps.release_notes.outputs.RELEASE_BODY }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
