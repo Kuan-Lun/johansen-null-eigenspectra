@@ -120,12 +120,12 @@ The simulation results are stored in a custom binary format optimized for high-p
 
 ## Reading existing results
 
-The library exposes `EigenvalueSimulation` in the module `johansen_null_eigenspectra::data_storage`. To use it, you need to:
+The library exposes `EigenvalueSimulation` and `JohansenModel` at the root level. To use it, you need to:
 
 1. Create an instance with the same parameters used for simulation:
 
     ```rust
-    use johansen_null_eigenspectra::johansen_models::JohansenModel;
+    use johansen_null_eigenspectra::{EigenvalueSimulation, JohansenModel};
     let model = JohansenModel::NoInterceptNoTrend; // choose the desired model
     let simulation = EigenvalueSimulation::new(model, dim, steps, num_runs);
     ```
@@ -145,8 +145,7 @@ The library exposes `EigenvalueSimulation` in the module `johansen_null_eigenspe
 ### Complete example
 
 ```rust
-use johansen_null_eigenspectra::data_storage::EigenvalueSimulation;
-use johansen_null_eigenspectra::johansen_models::JohansenModel;
+use johansen_null_eigenspectra::{EigenvalueSimulation, JohansenModel};
 
 // Create simulation with same parameters as command line: --dim 5 --steps 5000 --runs 1000000
 let simulation = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 5000, 1000000);

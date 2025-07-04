@@ -294,3 +294,58 @@ pub fn format_progress_bar(completed: usize, total: usize, width: usize) -> Stri
 //         assert_eq!(remaining, "unknown");
 //     }
 // }
+
+#[allow(dead_code)]
+/// 顯示百分位數結果的表格
+pub fn display_percentiles_table(
+    model_name: &str,
+    statistic_name: &str,
+    percentiles: &[f64],
+    values: &[f64],
+    total_count: usize,
+) {
+    println!("{} for model {}:", statistic_name, model_name);
+    println!(
+        "Total calculated {} values",
+        format_number_with_commas(total_count)
+    );
+
+    // 計算百分位數列的實際顯示寬度（包含 "th" 後綴）
+    let percentile_display_width = percentiles
+        .iter()
+        .map(|p| format!("{:.1}th", p * 100.0).len())
+        .max()
+        .unwrap_or(10);
+
+    // 確保標題列寬度至少和內容一樣寬
+    let percentile_col_width = percentile_display_width.max("Percentile".len());
+
+    let value_width = values
+        .iter()
+        .map(|v| format!("{:.6}", v).len())
+        .max()
+        .unwrap_or(12)
+        .max("Value".len());
+
+    // 表格標題
+    println!(
+        "{:<width1$} {:>width2$}",
+        "Percentile",
+        "Value",
+        width1 = percentile_col_width,
+        width2 = value_width
+    );
+    println!("{}", "-".repeat(percentile_col_width + value_width + 1));
+
+    // 表格內容
+    for (percentile, value) in percentiles.iter().zip(values.iter()) {
+        let percentile_str = format!("{:.1}th", percentile * 100.0);
+        println!(
+            "{:<width1$} {:>width2$.6}",
+            percentile_str,
+            value,
+            width1 = percentile_col_width,
+            width2 = value_width
+        );
+    }
+}

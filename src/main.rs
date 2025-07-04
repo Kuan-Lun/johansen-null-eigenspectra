@@ -12,9 +12,34 @@ mod tests;
 
 use cli::CliArgs;
 use data_storage::EigenvalueSimulation;
-use display_utils::{format_duration, format_number_with_commas};
+use display_utils::{display_percentiles_table, format_duration, format_number_with_commas};
 use johansen_models::JohansenModel;
 use std::time::Instant;
+
+/// 計算並顯示百分位數統計
+fn display_simulation_statistics(
+    simulation: &EigenvalueSimulation,
+    percentiles: &[f64],
+    statistic_type: &str,
+    calculate_fn: impl Fn(&EigenvalueSimulation, &[f64]) -> Result<Vec<f64>, Box<dyn std::error::Error>>,
+) {
+    match calculate_fn(simulation, percentiles) {
+        Ok(values) => {
+            if let Ok(data) = simulation.read_data() {
+                display_percentiles_table(
+                    &simulation.model.to_string(),
+                    statistic_type,
+                    percentiles,
+                    &values,
+                    data.len(),
+                );
+            }
+        }
+        Err(_) => {
+            // 如果讀取失敗，忽略這個模型
+        }
+    }
+}
 
 fn main() {
     // 解析命令行參數
@@ -87,10 +112,18 @@ fn main() {
                 simulation.run_simulation_quiet();
             } else {
                 simulation.run_simulation();
+
+                // 定義要計算的百分位數
+                let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
+
                 // 收集並顯示統計數據（在每個模型運行完後立即分析）
-                simulation.analyze_trace();
+                display_simulation_statistics(&simulation, &percentiles, "Trace", |sim, p| {
+                    sim.calculate_trace_percentiles(p)
+                });
                 println!();
-                simulation.analyze_maxeig();
+                display_simulation_statistics(&simulation, &percentiles, "MaxEig", |sim, p| {
+                    sim.calculate_maxeig_percentiles(p)
+                });
             }
         }
 

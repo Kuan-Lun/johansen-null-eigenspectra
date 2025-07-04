@@ -1,5 +1,4 @@
 use crate::data_storage::EigenvalueSimulation;
-use crate::display_utils::format_number_with_commas;
 
 /// 輸出百分位數統計資訊，使用內插法計算百分位值
 fn get_percentile_value(sorted_values: &[f64], percentile: f64) -> f64 {
@@ -16,11 +15,6 @@ fn get_percentile_value(sorted_values: &[f64], percentile: f64) -> f64 {
         let weight = rank - lower_index as f64;
         sorted_values[lower_index] * (1.0 - weight) + sorted_values[upper_index] * weight
     }
-}
-
-/// 分析 trait，定義分析方法接口
-pub trait SimulationAnalyzer {
-    fn analyze(&self, simulation: &EigenvalueSimulation);
 }
 
 /// 聚合函數 trait
@@ -44,63 +38,44 @@ impl Aggregator for MaxAggregator {
     }
 }
 
-/// 模板分析器，使用聚合函數和自定義標題
-pub struct TemplateAnalyzer<A: Aggregator> {
+/// 計算指定百分位數的值
+pub fn calculate_percentiles<A: Aggregator>(
+    simulation: &EigenvalueSimulation,
     aggregator: A,
-    title: String,
-}
-
-impl<A: Aggregator> TemplateAnalyzer<A> {
-    pub fn new(aggregator: A, title: impl Into<String>) -> Self {
-        Self {
-            aggregator,
-            title: title.into(),
-        }
+    percentiles: &[f64],
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+    let data = simulation.read_data()?;
+    if data.is_empty() {
+        return Ok(vec![]);
     }
-}
 
-impl<A: Aggregator> SimulationAnalyzer for TemplateAnalyzer<A> {
-    fn analyze(&self, simulation: &EigenvalueSimulation) {
-        match simulation.read_data() {
-            Ok(data) => {
-                if !data.is_empty() {
-                    let values: Vec<f64> = data
-                        .iter()
-                        .map(|(_, eigenvalues)| self.aggregator.aggregate(eigenvalues))
-                        .collect();
-                    let mut sorted_values = values;
-                    sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                    let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
-                    println!("{} for model {}:", self.title, simulation.model);
-                    println!(
-                        "Total calculated {} values",
-                        format_number_with_commas(sorted_values.len())
-                    );
-                    for &percentile in &percentiles {
-                        let value = get_percentile_value(&sorted_values, percentile);
-                        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
-                    }
-                }
-            }
-            Err(_) => {
-                // 如果讀取失敗，忽略這個模型
-            }
-        }
-    }
-}
+    let values: Vec<f64> = data
+        .iter()
+        .map(|(_, eigenvalues)| aggregator.aggregate(eigenvalues))
+        .collect();
+    let mut sorted_values = values;
+    sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-// 使用模板分析器替代原本的 TraceAnalyzer 和 MaxEigAnalyzer
-pub type TraceAnalyzer = TemplateAnalyzer<SumAggregator>;
-pub type MaxEigAnalyzer = TemplateAnalyzer<MaxAggregator>;
+    let results = percentiles
+        .iter()
+        .map(|&percentile| get_percentile_value(&sorted_values, percentile))
+        .collect();
+
+    Ok(results)
+}
 
 impl EigenvalueSimulation {
-    pub fn analyze_trace(&self) {
-        let analyzer = TraceAnalyzer::new(SumAggregator, "Trace");
-        analyzer.analyze(self);
+    pub fn calculate_trace_percentiles(
+        &self,
+        percentiles: &[f64],
+    ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+        calculate_percentiles(self, SumAggregator, percentiles)
     }
 
-    pub fn analyze_maxeig(&self) {
-        let analyzer = MaxEigAnalyzer::new(MaxAggregator, "MaxEig");
-        analyzer.analyze(self);
+    pub fn calculate_maxeig_percentiles(
+        &self,
+        percentiles: &[f64],
+    ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+        calculate_percentiles(self, MaxAggregator, percentiles)
     }
 }
