@@ -229,72 +229,6 @@ pub fn format_progress_bar(completed: usize, total: usize, width: usize) -> Stri
     )
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::time::Duration;
-
-//     #[test]
-//     fn test_format_duration() {
-//         let duration = Duration::from_secs(3725); // 1 小時 2 分鐘 5 秒
-//         let formatted = format_duration(duration);
-//         assert_eq!(formatted, "1 hour 2 minutes 5.00 seconds");
-
-//         let duration = Duration::from_secs(60); // 1 分鐘
-//         let formatted = format_duration(duration);
-//         assert_eq!(formatted, "1 minute 0.00 seconds");
-
-//         let duration = Duration::from_secs(30); // 30 秒
-//         let formatted = format_duration(duration);
-//         assert_eq!(formatted, "30.00 seconds");
-//     }
-
-//     #[test]
-//     fn test_format_number_with_commas() {
-//         assert_eq!(format_number_with_commas(1234567), "1,234,567");
-//         assert_eq!(format_number_with_commas(1000), "1,000");
-//         assert_eq!(format_number_with_commas(123), "123");
-//         assert_eq!(format_number_with_commas(0), "0");
-//     }
-
-//     #[test]
-//     fn test_format_percentage() {
-//         assert_eq!(format_percentage(25, 100, Some(1)), "25.0%");
-//         assert_eq!(format_percentage(1, 3, Some(2)), "33.33%");
-//         assert_eq!(format_percentage(0, 100, None), "0.0%");
-//         assert_eq!(format_percentage(0, 0, None), "0.0%"); // 邊界情況
-//     }
-
-//     #[test]
-//     fn test_format_progress_bar() {
-//         let bar = format_progress_bar(25, 100, 20);
-//         assert!(bar.contains("25.0%"));
-//         assert!(bar.contains("[#####"));
-
-//         let bar = format_progress_bar(0, 100, 10);
-//         assert!(bar.contains("0.0%"));
-//         assert!(bar.contains("[          ]"));
-
-//         let bar = format_progress_bar(100, 100, 10);
-//         assert!(bar.contains("100.0%"));
-//         assert!(bar.contains("[##########]"));
-//     }
-
-//     #[test]
-//     fn test_format_remaining_time() {
-//         let elapsed = Duration::from_secs(60); // 已經過 1 分鐘
-//         let remaining = format_remaining_time(elapsed, 100, 1000); // 完成了 100/1000
-//         assert!(remaining.contains("estimated remaining"));
-
-//         // 測試邊界情況
-//         let remaining = format_remaining_time(elapsed, 0, 1000);
-//         assert_eq!(remaining, "unknown");
-
-//         let remaining = format_remaining_time(elapsed, 1000, 1000);
-//         assert_eq!(remaining, "unknown");
-//     }
-// }
-
 #[allow(dead_code)]
 /// 顯示百分位數結果的表格
 pub fn display_percentiles_table(
@@ -304,7 +238,7 @@ pub fn display_percentiles_table(
     values: &[f64],
     total_count: usize,
 ) {
-    println!("{} for model {}:", statistic_name, model_name);
+    println!("{statistic_name} for model {model_name}:");
     println!(
         "Total calculated {} values",
         format_number_with_commas(total_count)
@@ -322,7 +256,7 @@ pub fn display_percentiles_table(
 
     let value_width = values
         .iter()
-        .map(|v| format!("{:.6}", v).len())
+        .map(|v| format!("{v:.6}").len())
         .max()
         .unwrap_or(12)
         .max("Value".len());
@@ -340,12 +274,6 @@ pub fn display_percentiles_table(
     // 表格內容
     for (percentile, value) in percentiles.iter().zip(values.iter()) {
         let percentile_str = format!("{:.1}th", percentile * 100.0);
-        println!(
-            "{:<width1$} {:>width2$.6}",
-            percentile_str,
-            value,
-            width1 = percentile_col_width,
-            width2 = value_width
-        );
+        println!("{percentile_str:<percentile_col_width$} {value:>value_width$.6}");
     }
 }
