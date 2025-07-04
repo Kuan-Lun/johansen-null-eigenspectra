@@ -1,6 +1,6 @@
-pub use johansen_null_eigenspectra::data_storage::EigenvalueSimulation;
-pub use johansen_null_eigenspectra::data_storage::writer::AppendOnlyWriter;
-pub use johansen_null_eigenspectra::johansen_models::JohansenModel;
+pub use crate::data_storage::EigenvalueSimulation;
+pub use crate::data_storage::writer::AppendOnlyWriter;
+pub use crate::johansen_models::JohansenModel;
 
 mod basic_api;
 mod data_integrity;

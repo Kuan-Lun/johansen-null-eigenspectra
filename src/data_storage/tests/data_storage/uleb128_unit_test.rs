@@ -1,6 +1,4 @@
-use johansen_null_eigenspectra::data_storage::uleb128::{
-    Uleb128Error, decode, encode, encoded_size,
-};
+use crate::data_storage::uleb128::{Uleb128Error, decode, encode, encoded_size};
 
 #[test]
 fn test_encode_basic_values() {

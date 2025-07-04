@@ -1,4 +1,4 @@
-use johansen_null_eigenspectra::data_storage::{
+use crate::data_storage::{
     progress::check_append_progress, reader::read_append_file, writer::AppendOnlyWriter,
 };
 
