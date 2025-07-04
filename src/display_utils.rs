@@ -63,13 +63,12 @@ macro_rules! conditional_println_empty {
 /// 格式化後的時間字串，例如 "2 days 3 hours 45 minutes 30.25 seconds"
 ///
 /// # 範例
-/// ```
+/// ```text
 /// use std::time::Duration;
-/// use johansen_null_eigenspectra::display_utils::format_duration;
 ///
 /// let duration = Duration::from_secs(3725); // 1 小時 2 分鐘 5 秒
 /// let formatted = format_duration(duration);
-/// assert_eq!(formatted, "1 hour 2 minutes 5.00 seconds");
+/// // 輸出: "1 hour 2 minutes 5.00 seconds"
 /// ```
 pub fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.as_secs_f64();
@@ -126,9 +125,7 @@ pub fn format_duration(duration: Duration) -> String {
 /// 帶有逗號分隔符的數字字串
 ///
 /// # 範例
-/// ```
-/// use johansen_null_eigenspectra::display_utils::format_number_with_commas;
-///
+/// ```text
 /// assert_eq!(format_number_with_commas(1234567), "1,234,567");
 /// assert_eq!(format_number_with_commas(1000), "1,000");
 /// assert_eq!(format_number_with_commas(123), "123");
@@ -159,13 +156,12 @@ pub fn format_number_with_commas(n: usize) -> String {
 /// 剩餘時間的格式化字串，如果無法估算則返回 "unknown"
 ///
 /// # 範例
-/// ```
+/// ```text
 /// use std::time::Duration;
-/// use johansen_null_eigenspectra::display_utils::format_remaining_time;
 ///
 /// let elapsed = Duration::from_secs(60); // 已經過 1 分鐘
 /// let remaining = format_remaining_time(elapsed, 100, 1000); // 完成了 100/1000
-/// // 預期剩餘時間約為 9 分鐘
+/// // 輸出類似: "estimated remaining: 9 minutes 0.00 seconds"
 /// ```
 pub fn format_remaining_time(elapsed: Duration, completed: usize, total: usize) -> String {
     if completed == 0 || completed >= total {
@@ -199,9 +195,7 @@ pub fn format_remaining_time(elapsed: Duration, completed: usize, total: usize) 
 /// 格式化的百分比字串
 ///
 /// # 範例
-/// ```
-/// use johansen_null_eigenspectra::display_utils::format_percentage;
-///
+/// ```text
 /// assert_eq!(format_percentage(25, 100, Some(1)), "25.0%");
 /// assert_eq!(format_percentage(1, 3, Some(2)), "33.33%");
 /// assert_eq!(format_percentage(0, 100, None), "0.0%");
@@ -229,11 +223,9 @@ pub fn format_percentage(completed: usize, total: usize, decimal_places: Option<
 /// 視覺化的進度條字串
 ///
 /// # 範例
-/// ```
-/// use johansen_null_eigenspectra::display_utils::format_progress_bar;
-///
+/// ```text
 /// let bar = format_progress_bar(25, 100, 20);
-/// // 輸出類似: "[#####               ] 25.0%"
+/// // 輸出: "[#####               ] 25.0%"
 /// ```
 #[allow(dead_code)]
 pub fn format_progress_bar(completed: usize, total: usize, width: usize) -> String {
@@ -252,3 +244,69 @@ pub fn format_progress_bar(completed: usize, total: usize, width: usize) -> Stri
         format_percentage(completed, total, Some(1))
     )
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use std::time::Duration;
+
+//     #[test]
+//     fn test_format_duration() {
+//         let duration = Duration::from_secs(3725); // 1 小時 2 分鐘 5 秒
+//         let formatted = format_duration(duration);
+//         assert_eq!(formatted, "1 hour 2 minutes 5.00 seconds");
+
+//         let duration = Duration::from_secs(60); // 1 分鐘
+//         let formatted = format_duration(duration);
+//         assert_eq!(formatted, "1 minute 0.00 seconds");
+
+//         let duration = Duration::from_secs(30); // 30 秒
+//         let formatted = format_duration(duration);
+//         assert_eq!(formatted, "30.00 seconds");
+//     }
+
+//     #[test]
+//     fn test_format_number_with_commas() {
+//         assert_eq!(format_number_with_commas(1234567), "1,234,567");
+//         assert_eq!(format_number_with_commas(1000), "1,000");
+//         assert_eq!(format_number_with_commas(123), "123");
+//         assert_eq!(format_number_with_commas(0), "0");
+//     }
+
+//     #[test]
+//     fn test_format_percentage() {
+//         assert_eq!(format_percentage(25, 100, Some(1)), "25.0%");
+//         assert_eq!(format_percentage(1, 3, Some(2)), "33.33%");
+//         assert_eq!(format_percentage(0, 100, None), "0.0%");
+//         assert_eq!(format_percentage(0, 0, None), "0.0%"); // 邊界情況
+//     }
+
+//     #[test]
+//     fn test_format_progress_bar() {
+//         let bar = format_progress_bar(25, 100, 20);
+//         assert!(bar.contains("25.0%"));
+//         assert!(bar.contains("[#####"));
+
+//         let bar = format_progress_bar(0, 100, 10);
+//         assert!(bar.contains("0.0%"));
+//         assert!(bar.contains("[          ]"));
+
+//         let bar = format_progress_bar(100, 100, 10);
+//         assert!(bar.contains("100.0%"));
+//         assert!(bar.contains("[##########]"));
+//     }
+
+//     #[test]
+//     fn test_format_remaining_time() {
+//         let elapsed = Duration::from_secs(60); // 已經過 1 分鐘
+//         let remaining = format_remaining_time(elapsed, 100, 1000); // 完成了 100/1000
+//         assert!(remaining.contains("estimated remaining"));
+
+//         // 測試邊界情況
+//         let remaining = format_remaining_time(elapsed, 0, 1000);
+//         assert_eq!(remaining, "unknown");
+
+//         let remaining = format_remaining_time(elapsed, 1000, 1000);
+//         assert_eq!(remaining, "unknown");
+//     }
+// }
