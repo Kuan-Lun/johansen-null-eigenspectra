@@ -30,6 +30,7 @@ Document AI agent interactions, configurations, and best practices for maintaini
 - Keep documentation up to date with code changes
 - Provide clear examples for usage
 - Document breaking changes and migration paths
+- Do not use emoji symbols in any documentation or commit messages
 
 ### Security & Dependencies
 
