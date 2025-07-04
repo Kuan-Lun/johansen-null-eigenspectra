@@ -5,4 +5,4 @@
 //! - 整合測試 (integration_test)
 
 mod append_writer_test;
-mod integration_test;
+mod integration;
