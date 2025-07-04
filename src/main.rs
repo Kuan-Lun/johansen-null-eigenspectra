@@ -7,6 +7,9 @@ mod matrix_utils;
 mod rng_matrix;
 mod simulation_analyzers;
 
+#[cfg(test)]
+mod tests;
+
 use cli::CliArgs;
 use data_storage::EigenvalueSimulation;
 use display_utils::{format_duration, format_number_with_commas};

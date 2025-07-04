@@ -13,5 +13,8 @@ pub(crate) mod thread_manager;
 pub(crate) mod uleb128; // ULEB128 編碼/解碼
 pub(crate) mod writer;
 
+#[cfg(test)]
+mod tests;
+
 // Re-export the main API
 pub use simulation::EigenvalueSimulation;
