@@ -124,23 +124,23 @@ The library exposes `EigenvalueSimulation` in the module `johansen_null_eigenspe
 
 1. Create an instance with the same parameters used for simulation:
 
-```rust
-use johansen_null_eigenspectra::johansen_models::JohansenModel;
-let model = JohansenModel::NoInterceptNoTrend; // choose the desired model
-let simulation = EigenvalueSimulation::new(model, dim, steps, num_runs);
-```
+    ```rust
+    use johansen_null_eigenspectra::johansen_models::JohansenModel;
+    let model = JohansenModel::NoInterceptNoTrend; // choose the desired model
+    let simulation = EigenvalueSimulation::new(model, dim, steps, num_runs);
+    ```
 
 1. Run the simulation (if data doesn't exist yet):
 
-```rust
-simulation.run_simulation(); // or run_simulation_quiet()
-```
+    ```rust
+    simulation.run_simulation(); // or run_simulation_quiet()
+    ```
 
 1. Read the data using the method:
 
-```rust
-pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>>
-```
+    ```rust
+    pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>>
+    ```
 
 ### Complete example
 
