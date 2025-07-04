@@ -1,7 +1,7 @@
-use crate::{STANDARD_NORMAL_EXPECTED_CDF, STANDARD_NORMAL_QUANTILES};
-use crate::{assert_vec_approx_eq, interpolated_cdf_sorted};
+use super::{STANDARD_NORMAL_EXPECTED_CDF, STANDARD_NORMAL_QUANTILES};
+use super::{assert_vec_approx_eq, interpolated_cdf_sorted};
 
-use johansen_null_eigenspectra::rng_matrix::{TimeAxisDirection, brownian_motion_matrix};
+use crate::rng_matrix::{TimeAxisDirection, brownian_motion_matrix};
 
 use nalgebra::DMatrix;
 

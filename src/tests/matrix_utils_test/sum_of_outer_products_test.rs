@@ -1,4 +1,4 @@
-use johansen_null_eigenspectra::matrix_utils::sum_of_outer_products;
+use crate::matrix_utils::sum_of_outer_products;
 use nalgebra::DMatrix;
 
 #[test]

@@ -1,4 +1,4 @@
-use johansen_null_eigenspectra::johansen_models::JohansenModel;
+use crate::johansen_models::JohansenModel;
 
 #[test]
 fn test_model_numbers() {

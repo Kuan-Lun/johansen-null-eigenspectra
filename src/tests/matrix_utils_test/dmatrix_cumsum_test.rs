@@ -1,4 +1,4 @@
-use johansen_null_eigenspectra::matrix_utils::{CumsumOrder, dmatrix_cumsum};
+use crate::matrix_utils::{CumsumOrder, dmatrix_cumsum};
 use nalgebra::DMatrix;
 
 #[test]

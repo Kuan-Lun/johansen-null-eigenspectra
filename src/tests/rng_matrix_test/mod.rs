@@ -1,4 +1,5 @@
 mod brownian_motion_test;
+mod gen_normal_matrix_test;
 
 // 标准正态分布的分位数和期望CDF值，供所有测试共享
 pub const STANDARD_NORMAL_QUANTILES: &[f64] = &[

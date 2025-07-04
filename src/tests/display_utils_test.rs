@@ -1,4 +1,4 @@
-use johansen_null_eigenspectra::display_utils::{
+use crate::display_utils::{
     format_duration, format_number_with_commas, format_percentage, format_progress_bar,
     format_remaining_time,
 };
