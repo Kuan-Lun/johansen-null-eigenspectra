@@ -103,7 +103,7 @@ fn main() {
 
     // 讀取特定模型的數據
     conditional_println!(args.quiet, "Starting to read model data...");
-    let model = JohansenModel::NoInterceptNoTrend; // 使用無截距無趨勢模型作為範例
+    let model = models_vec[0]; // 使用第一個模型作為範例
     let simulation = EigenvalueSimulation::new(model, args.dim_start, args.steps, args.num_runs);
     conditional_println!(
         args.quiet,
