@@ -4,14 +4,14 @@
 //! and storing eigenvalue data efficiently with resumable append-only writing.
 
 mod config;
-pub mod file_format;
-pub mod parallel_compute; // 並行計算引擎
-pub mod progress;
-pub mod reader;
-mod simulation;
-pub mod thread_manager;
-pub mod uleb128; // ULEB128 編碼/解碼
-pub mod writer;
+pub(crate) mod file_format;
+pub(crate) mod parallel_compute; // 並行計算引擎
+pub(crate) mod progress;
+pub(crate) mod reader;
+pub(crate) mod simulation;
+pub(crate) mod thread_manager;
+pub(crate) mod uleb128; // ULEB128 編碼/解碼
+pub(crate) mod writer;
 
 // Re-export the main API
 pub use simulation::EigenvalueSimulation;

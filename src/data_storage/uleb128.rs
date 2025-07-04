@@ -9,16 +9,11 @@
 //! - 數據按小端序存儲（最低有效位元組在前）
 //!
 //! # 範例
-//! ```
-//! use johansen_null_eigenspectra::data_storage::uleb128::{encode, decode};
-//!
-//! let value = 300u32;
-//! let encoded = encode(value);
-//! let (decoded, bytes_used) = decode(&encoded).unwrap();
-//! assert_eq!(decoded, value);
-//! ```
+//! 使用 encode 和 decode 函數進行 ULEB128 編碼和解碼：
+//! - encode(300) 將返回 [0xAC, 0x02]
+//! - decode([0xAC, 0x02]) 將返回 (300, 2)
 
-// 這是一個公共 API 模塊，某些函數可能只被外部用戶或文檔測試使用
+// 這是一個內部模塊，僅供 crate 內部使用
 #![allow(dead_code)]
 
 use std::fs::File;
@@ -65,14 +60,11 @@ impl From<std::io::Error> for Uleb128Error {
 /// 編碼後的位元組向量
 ///
 /// # 範例
-/// ```
-/// use johansen_null_eigenspectra::data_storage::uleb128::encode;
-///
-/// assert_eq!(encode(0), vec![0x00]);
-/// assert_eq!(encode(127), vec![0x7F]);
-/// assert_eq!(encode(128), vec![0x80, 0x01]);
-/// assert_eq!(encode(300), vec![0xAC, 0x02]);
-/// ```
+/// 編碼各種數值：
+/// - encode(0) -> [0x00]
+/// - encode(127) -> [0x7F]
+/// - encode(128) -> [0x80, 0x01]
+/// - encode(300) -> [0xAC, 0x02]
 pub fn encode(mut value: u32) -> Vec<u8> {
     let mut result = Vec::new();
 
@@ -103,14 +95,11 @@ pub fn encode(mut value: u32) -> Vec<u8> {
 /// `Ok((解碼的值, 使用的位元組數))` 或 `Err(Uleb128Error)`
 ///
 /// # 範例
-/// ```
-/// use johansen_null_eigenspectra::data_storage::uleb128::decode;
-///
-/// assert_eq!(decode(&[0x00]).unwrap(), (0, 1));
-/// assert_eq!(decode(&[0x7F]).unwrap(), (127, 1));
-/// assert_eq!(decode(&[0x80, 0x01]).unwrap(), (128, 2));
-/// assert_eq!(decode(&[0xAC, 0x02]).unwrap(), (300, 2));
-/// ```
+/// 解碼各種數值：
+/// - decode([0x00]) -> (0, 1)
+/// - decode([0x7F]) -> (127, 1)
+/// - decode([0x80, 0x01]) -> (128, 2)
+/// - decode([0xAC, 0x02]) -> (300, 2)
 pub fn decode(bytes: &[u8]) -> Result<(u32, usize), Uleb128Error> {
     let mut result = 0u32;
     let mut shift = 0;
@@ -157,15 +146,12 @@ pub fn decode(bytes: &[u8]) -> Result<(u32, usize), Uleb128Error> {
 /// 編碼後需要的位元組數
 ///
 /// # 範例
-/// ```
-/// use johansen_null_eigenspectra::data_storage::uleb128::encoded_size;
-///
-/// assert_eq!(encoded_size(0), 1);
-/// assert_eq!(encoded_size(127), 1);
-/// assert_eq!(encoded_size(128), 2);
-/// assert_eq!(encoded_size(16383), 2);
-/// assert_eq!(encoded_size(16384), 3);
-/// ```
+/// 各種數值的編碼大小：
+/// - encoded_size(0) -> 1
+/// - encoded_size(127) -> 1
+/// - encoded_size(128) -> 2
+/// - encoded_size(16383) -> 2
+/// - encoded_size(16384) -> 3
 pub fn encoded_size(value: u32) -> usize {
     if value == 0 {
         return 1;
@@ -180,26 +166,21 @@ pub fn encoded_size(value: u32) -> usize {
     size
 }
 
-/// 從 BufReader 讀取 ULEB128 編碼的 u32 值
-///
-/// 這是一個便利函數，用於從 I/O 流中直接讀取 ULEB128 編碼的數據。
+/// 從讀取器中讀取 ULEB128 編碼的值
 ///
 /// # 參數
-/// * `reader` - 要讀取的 BufReader
+/// * `reader` - 包含 ULEB128 編碼數據的檔案讀取器
 ///
 /// # 返回值
 /// `Ok(解碼的值)` 或 `Err(Uleb128Error)`
 ///
 /// # 範例
-/// ```no_run
-/// use std::fs::File;
-/// use std::io::BufReader;
-/// use johansen_null_eigenspectra::data_storage::uleb128::read_from_reader;
-///
-/// let file = File::open("data.bin")?;
-/// let mut reader = BufReader::new(file);
-/// let value = read_from_reader(&mut reader)?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// 從檔案讀取 ULEB128 編碼的值：
+/// ```
+/// // 開啟檔案並創建讀取器
+/// // let file = File::open("data.bin")?;
+/// // let mut reader = BufReader::new(file);
+/// // let value = read_from_reader(&mut reader)?;
 /// ```
 pub fn read_from_reader(reader: &mut BufReader<File>) -> Result<u32, Uleb128Error> {
     let mut result = 0u32;
