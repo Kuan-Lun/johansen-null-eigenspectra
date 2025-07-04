@@ -23,6 +23,12 @@ fn main() {
     // 配置 Rayon 線程池
     args.configure_rayon();
 
+    // 將 models_vec 提升到 main 函式較外層作用域
+    let models_vec = args
+        .models
+        .clone()
+        .unwrap_or_else(|| JohansenModel::all_models().to_vec());
+
     conditional_println!(args.quiet, "=== Large-scale Simulation Demo ===");
     conditional_println!(
         args.quiet,
@@ -70,11 +76,6 @@ fn main() {
                 format_number_with_commas(args.num_runs)
             );
         }
-
-        let models_vec = args
-            .models
-            .clone()
-            .unwrap_or_else(|| JohansenModel::all_models().to_vec());
 
         // 對每個模型運行模擬
         for &model in &models_vec {
@@ -176,9 +177,10 @@ fn main() {
 
     // 展示所有模型的狀態
     conditional_println!(args.quiet, "\n=== All Models Status ===");
-    let all_data = simulation.read_all_data();
-    for (model, result) in all_data {
-        match result {
+    // 使用 for-loop 搭配 simulation.read_data
+    for &model in &models_vec {
+        let sim = EigenvalueSimulation::new(model, args.dim_start, args.steps, args.num_runs);
+        match sim.read_data() {
             Ok(data) => conditional_println!(
                 args.quiet,
                 "  {}: {} data records",

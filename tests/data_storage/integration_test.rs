@@ -134,7 +134,14 @@ fn test_read_all_data() {
         test_simulation.run_simulation_quiet();
     }
 
-    let all_data = simulation.read_all_data();
+    // 改用 for-loop 逐個模型讀取資料
+    let mut all_data = Vec::new();
+    for &model in &JohansenModel::all_models() {
+        let sim = EigenvalueSimulation::new(model, 3, 52, 3);
+        let result = sim.read_data();
+        all_data.push((model, result));
+    }
+
     assert_eq!(all_data.len(), 5); // 5個模型
 
     // 檢查每個模型的結果

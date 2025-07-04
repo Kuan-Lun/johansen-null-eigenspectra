@@ -6,9 +6,6 @@ use super::parallel_compute::run_model_simulation;
 use super::reader::read_append_file;
 use crate::johansen_models::JohansenModel;
 
-/// 讀取所有數據的結果類型別名
-pub type AllDataResult = Vec<(JohansenModel, std::io::Result<Vec<(u32, Vec<f64>)>>)>;
-
 /// 特徵值模擬配置結構體
 /// 封裝所有模擬參數，提供統一的運算和讀取接口
 #[derive(Debug, Clone)]
@@ -51,17 +48,6 @@ impl EigenvalueSimulation {
     pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
         let filename = self.get_filename(self.model);
         read_append_file(&filename).map(|(data, _model, _dim, _steps)| data)
-    }
-
-    /// 讀取所有模型的特徵值數據
-    pub fn read_all_data(&self) -> AllDataResult {
-        JohansenModel::all_models()
-            .into_iter()
-            .map(|model| {
-                let sim = EigenvalueSimulation::new(model, self.dim, self.steps, self.num_runs);
-                (model, sim.read_data())
-            })
-            .collect()
     }
 
     /// 獲取當前模型的檔案名稱
