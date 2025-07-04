@@ -125,19 +125,21 @@ The library exposes `EigenvalueSimulation` in the module `johansen_null_eigenspe
 1. Create an instance with the same parameters used for simulation:
 
 ```rust
-let simulation = EigenvalueSimulation::new(dim, steps, num_runs);
+use johansen_null_eigenspectra::johansen_models::JohansenModel;
+let model = JohansenModel::NoInterceptNoTrend; // choose the desired model
+let simulation = EigenvalueSimulation::new(model, dim, steps, num_runs);
 ```
 
 1. Run the simulation (if data doesn't exist yet):
 
 ```rust
-simulation.run_simulation(&models); // or run_simulation_quiet(&models)
+simulation.run_simulation(); // or run_simulation_quiet()
 ```
 
 1. Read the data using the method:
 
 ```rust
-pub fn read_data(&self, model: JohansenModel) -> std::io::Result<Vec<(u32, Vec<f64>)>>
+pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>>
 ```
 
 ### Complete example
@@ -147,10 +149,10 @@ use johansen_null_eigenspectra::data_storage::EigenvalueSimulation;
 use johansen_null_eigenspectra::johansen_models::JohansenModel;
 
 // Create simulation with same parameters as command line: --dim 5 --steps 5000 --runs 1000000
-let simulation = EigenvalueSimulation::new(5, 5000, 1000000);
+let simulation = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 5000, 1000000);
 
 // Read data for Model 0 (NoInterceptNoTrend)
-match simulation.read_data(JohansenModel::NoInterceptNoTrend) {
+match simulation.read_data() {
     Ok(data) => {
         println!("Loaded {} eigenvalue records", data.len());
         for (seed, eigenvalues) in data.iter().take(5) {
@@ -161,6 +163,6 @@ match simulation.read_data(JohansenModel::NoInterceptNoTrend) {
 }
 ```
 
-This method reads all eigenvalue records for the given model from the generated `.dat` file. Each record contains the random seed and the corresponding eigenvalue vector. These data can be used for applications such as the Johansen trace test or maximum eigenvalue test.
+This method reads all eigenvalue records for the simulation's configured model from the generated `.dat` file. Each record contains the random seed and the corresponding eigenvalue vector. These data can be used for applications such as the Johansen trace test or maximum eigenvalue test.
 
 **Important**: The `EigenvalueSimulation` instance must be created with the same `dim`, `steps`, and `num_runs` parameters that were used to generate the data files, as these parameters determine the filename.
