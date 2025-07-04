@@ -12,41 +12,103 @@ use display_utils::{format_duration, format_number_with_commas};
 use johansen_models::JohansenModel;
 use std::time::Instant;
 
-/// 輸出百分位數統計資訊
-fn print_percentile_statistics(sorted_eigenvalues: &[f64], percentiles: &[f64]) {
-    println!(
-        "Total calculated {} eigenvalue sums",
-        format_number_with_commas(sorted_eigenvalues.len())
-    );
-
-    // 輸出各個百分位數
-    for &percentile in percentiles {
-        let index = ((sorted_eigenvalues.len() as f64) * percentile) as usize;
-        let value = sorted_eigenvalues[index.min(sorted_eigenvalues.len() - 1)];
-        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
+/// 輸出百分位數統計資訊，使用內插法計算百分位值
+fn get_percentile_value(sorted_values: &[f64], percentile: f64) -> f64 {
+    let n = sorted_values.len();
+    if n == 0 {
+        return f64::NAN;
+    }
+    let rank = percentile * (n - 1) as f64;
+    let lower_index = rank.floor() as usize;
+    let upper_index = rank.ceil() as usize;
+    if lower_index == upper_index {
+        sorted_values[lower_index]
+    } else {
+        let weight = rank - lower_index as f64;
+        sorted_values[lower_index] * (1.0 - weight) + sorted_values[upper_index] * weight
     }
 }
 
-/// 從已有的數據文件中收集和分析統計信息
-fn analyze_simulation_statistics(simulation: &EigenvalueSimulation) {
-    match simulation.read_data() {
-        Ok(data) => {
-            if !data.is_empty() {
-                let eigenvalue_sums: Vec<f64> = data
-                    .iter()
-                    .map(|(_, eigenvalues)| eigenvalues.iter().sum())
-                    .collect();
+/// 分析 trait，定義分析方法接口
+pub trait SimulationAnalyzer {
+    fn analyze(&self, simulation: &EigenvalueSimulation);
+}
 
-                let mut sorted_eigenvalue_sums = eigenvalue_sums;
-                sorted_eigenvalue_sums.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
-                println!("Statistics for model {}:", simulation.model);
-                print_percentile_statistics(&sorted_eigenvalue_sums, &percentiles);
+/// Trace 分析實作
+pub struct TraceAnalyzer;
+
+impl SimulationAnalyzer for TraceAnalyzer {
+    fn analyze(&self, simulation: &EigenvalueSimulation) {
+        match simulation.read_data() {
+            Ok(data) => {
+                if !data.is_empty() {
+                    let values: Vec<f64> = data
+                        .iter()
+                        .map(|(_, eigenvalues)| eigenvalues.iter().sum())
+                        .collect();
+                    let mut sorted_values = values;
+                    sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
+                    println!("Trace for model {}:", simulation.model);
+                    println!(
+                        "Total calculated {} eigenvalue sums",
+                        format_number_with_commas(sorted_values.len())
+                    );
+                    for &percentile in &percentiles {
+                        let value = get_percentile_value(&sorted_values, percentile);
+                        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
+                    }
+                }
+            }
+            Err(_) => {
+                // 如果讀取失敗，忽略這個模型
             }
         }
-        Err(_) => {
-            // 如果讀取失敗，忽略這個模型
+    }
+}
+
+/// Max 分析實作
+pub struct MaxEigAnalyzer;
+
+impl SimulationAnalyzer for MaxEigAnalyzer {
+    fn analyze(&self, simulation: &EigenvalueSimulation) {
+        match simulation.read_data() {
+            Ok(data) => {
+                if !data.is_empty() {
+                    let values: Vec<f64> = data
+                        .iter()
+                        .map(|(_, eigenvalues)| {
+                            eigenvalues.iter().cloned().fold(f64::MIN, f64::max)
+                        })
+                        .collect();
+                    let mut sorted_values = values;
+                    sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    let percentiles = vec![0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99];
+                    println!("MaxEig for model {}:", simulation.model);
+                    println!(
+                        "Total calculated {} max eigenvalues",
+                        format_number_with_commas(sorted_values.len())
+                    );
+                    for &percentile in &percentiles {
+                        let value = get_percentile_value(&sorted_values, percentile);
+                        println!("{:.0}th percentile value: {:.6}", percentile * 100.0, value);
+                    }
+                }
+            }
+            Err(_) => {
+                // 如果讀取失敗，忽略這個模型
+            }
         }
+    }
+}
+
+impl EigenvalueSimulation {
+    pub fn analyze_trace(&self) {
+        TraceAnalyzer.analyze(self);
+    }
+
+    pub fn analyze_maxeig(&self) {
+        MaxEigAnalyzer.analyze(self);
     }
 }
 
@@ -121,7 +183,8 @@ fn main() {
             } else {
                 simulation.run_simulation();
                 // 收集並顯示統計數據（在每個模型運行完後立即分析）
-                analyze_simulation_statistics(&simulation);
+                simulation.analyze_trace();
+                simulation.analyze_maxeig();
             }
         }
 
