@@ -9,6 +9,6 @@ fn test_filename_consistency() {
         assert!(filename.contains(&format!("model{}", i)));
         assert!(filename.contains("dim3"));
         assert!(filename.contains("steps500"));
-        assert!(filename.contains("_1000.dat"));
+        assert!(filename.ends_with(".dat"));
     }
 }

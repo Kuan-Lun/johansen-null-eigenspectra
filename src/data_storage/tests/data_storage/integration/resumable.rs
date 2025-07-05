@@ -28,8 +28,9 @@ fn test_resumable_functionality() {
     let removed_count = remove_seed_from_file(&simulation, model, seeds_to_remove).unwrap();
     assert_eq!(removed_count, 2);
 
-    // 檢查移除後的數據
-    let mut data_after_removal = simulation.read_data().unwrap();
+    // 檢查移除後的數據 - 由於數據不完整，read_data() 會報錯
+    // 改用 read_all_data() 來檢查剩餘數據
+    let mut data_after_removal = simulation.read_all_data().unwrap();
     data_after_removal.sort_by_key(|(seed, _)| *seed);
     assert_eq!(data_after_removal.len(), 3);
 

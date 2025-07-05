@@ -13,7 +13,8 @@ fn test_basic_simulation_api() {
     // 測試檔案名稱生成
     assert!(filename.contains("model0"));
     assert!(filename.contains("dim2"));
-    assert!(filename.contains("_5.dat"));
+    assert!(filename.contains("steps101"));
+    assert!(filename.ends_with(".dat"));
 
     // 運行模擬
     for &model in &JohansenModel::all_models() {

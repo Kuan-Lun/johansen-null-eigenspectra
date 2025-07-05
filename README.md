@@ -105,7 +105,7 @@ The `--model` parameter accepts comma-separated model numbers (0-4). Each number
 - `--model 1` runs only model 1
 - If not specified, all models (0,1,2,3,4) are computed by default
 
-The simulation writes results to `data/eigenvalues_modelX_dimY_stepsZ_N.dat` where `X` is the model number, `Y` is the dimension, `Z` is the number of steps, and `N` is the number of runs.
+The simulation writes results to `data/eigenvalues_modelX_dimY_stepsZ.dat` where `X` is the model number, `Y` is the dimension, and `Z` is the number of steps.
 
 ## Data File Format
 
