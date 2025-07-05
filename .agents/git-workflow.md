@@ -97,9 +97,9 @@
 
 **格式說明**: 使用圓括號 `(scope)` 而非方括號 `[scope]`，例如：
 
-- ✅ `feat(matrix): add eigenvalue calculation`
-- ✅ `fix(johansen): correct statistical test logic`
-- ❌ `feat[matrix]: add eigenvalue calculation`
+- 正確：`feat(matrix): add eigenvalue calculation`
+- 正確：`fix(johansen): correct statistical test logic`
+- 錯誤：`feat[matrix]: add eigenvalue calculation`
 
 ## 分支操作規範
 
@@ -198,3 +198,7 @@ git branch -d temp/ai-refactor
 - 不要提交密碼、金鑰或其他敏感資訊
 - 使用 .gitignore 排除臨時文件和建構產物
 - 檢查提交內容中的敏感資料
+
+### 版本更新
+
+- 更新 `Cargo.toml` 中的 `version` 時，必須在 `.github/releases` 目錄新增對應版本的說明檔
