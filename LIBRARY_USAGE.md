@@ -10,11 +10,11 @@ The command line `--model` option uses numeric identifiers (0–4). These map di
 |-------|------------------------|-------------|
 | 0 | `NoInterceptNoTrend` | No intercept, no trend |
 | 1 | `InterceptNoTrendWithInterceptInCoint` | Intercept, no trend, intercept in cointegration |
-| 2 | `InterceptNoTrendNoInterceptInCoint` | Intercept, no trend, intercept not fully explained by cointegration |
-| 3 | `InterceptTrendWithTrendInCoint` | Intercept, trend, trend in cointegration |
-| 4 | `InterceptTrendNoTrendInCoint` | Intercept, trend, intercept and trend not fully explained by cointegration |
+| 2 | `InterceptNoTrendUnrestrictedIntercept` | Intercept, no trend, intercept not fully explained by cointegration |
+| 3 | `InterceptTrendUnrestrictedInterceptRestrictedTrend` | Intercept, trend, trend in cointegration |
+| 4 | `InterceptTrendUnrestrictedBoth` | Intercept, trend, intercept and trend not fully explained by cointegration |
 
-`JohansenModel::default()` returns `InterceptNoTrendNoInterceptInCoint` (model 2).
+`JohansenModel::default()` returns `InterceptNoTrendUnrestrictedIntercept` (model 2).
 
 ## Basic functions
 
