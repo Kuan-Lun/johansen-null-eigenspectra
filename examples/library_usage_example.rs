@@ -1,9 +1,8 @@
 use johansen_null_eigenspectra::{EigenvalueSimulation, JohansenModel};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create simulation with the same parameters used by the CLI: --dim 5 --steps 5000 --runs 1000000
-    let simulation =
-        EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 5000, 1_000_000);
+    // Create simulation with the same parameters used by the CLI: --dim 5 --steps 1000 --runs 1000
+    let simulation = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 1000, 1000);
 
     // Run the simulation if data does not already exist
     simulation.run_simulation();
