@@ -96,9 +96,9 @@ pub fn calculate_eigenvalues(
 /// # 模型說明
 /// - `NoInterceptNoTrend`: 無常數項無趨勢項模型
 /// - `InterceptNoTrendWithInterceptInCoint`: 有常數項無趨勢項且常數項在協整關係中
-/// - `InterceptNoTrendNoInterceptInCoint`: 有常數項無趨勢項但常數項不在協整關係中
-/// - `InterceptTrendWithTrendInCoint`: 有常數項有趨勢項且趨勢項在協整關係中
-/// - `InterceptTrendNoTrendInCoint`: 有常數項有趨勢項但趨勢項不在協整關係中
+/// - `InterceptNoTrendUnrestrictedIntercept`: 有常數項無趨勢項但常數項不在協整關係中
+/// - `InterceptTrendUnrestrictedInterceptRestrictedTrend`: 有常數項有趨勢項且趨勢項在協整關係中
+/// - `InterceptTrendUnrestrictedBoth`: 有常數項有趨勢項但趨勢項不在協整關係中
 fn construct_f_matrix(bm_previous: &DMatrix<f64>, model: JohansenModel) -> DMatrix<f64> {
     let (rows, cols) = bm_previous.shape();
 
@@ -112,7 +112,7 @@ fn construct_f_matrix(bm_previous: &DMatrix<f64>, model: JohansenModel) -> DMatr
             fm
         }
 
-        JohansenModel::InterceptNoTrendNoInterceptInCoint => {
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept => {
             let t = cols as f64;
             let mut x_demean = bm_previous.rows(0, rows - 1).clone_owned();
 
@@ -137,7 +137,7 @@ fn construct_f_matrix(bm_previous: &DMatrix<f64>, model: JohansenModel) -> DMatr
             combined
         }
 
-        JohansenModel::InterceptTrendWithTrendInCoint => {
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => {
             let mut x = bm_previous.clone_owned();
             let t = cols as f64;
 
@@ -161,7 +161,7 @@ fn construct_f_matrix(bm_previous: &DMatrix<f64>, model: JohansenModel) -> DMatr
             fm
         }
 
-        JohansenModel::InterceptTrendNoTrendInCoint => {
+        JohansenModel::InterceptTrendUnrestrictedBoth => {
             let t = cols as f64;
 
             // 構造時間趨勢項

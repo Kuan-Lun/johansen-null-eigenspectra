@@ -39,7 +39,7 @@ pub fn spawn_append_writer_thread(
 
         let eigenvalues_per_run = match model {
             crate::johansen_models::JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | crate::johansen_models::JohansenModel::InterceptTrendWithTrendInCoint => dim + 1,
+            | crate::johansen_models::JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => dim + 1,
             _ => dim,
         };
 
