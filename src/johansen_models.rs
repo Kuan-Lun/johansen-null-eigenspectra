@@ -14,15 +14,15 @@ pub enum JohansenModel {
 
     /// Model 2: 有截距項，無趨勢項，截距無法完全由協整解釋
     /// μ_t = μ_0 = (α ρ_0 + α_⊥ γ_0) 1
-    InterceptNoTrendNoInterceptInCoint,
+    InterceptNoTrendUnrestrictedIntercept,
 
     /// Model 3: 有截距項，有趨勢項，截距無法完全由協整解釋，協整關係中有趨勢
     /// μ_t = μ_0 + α ρ_1 t
-    InterceptTrendWithTrendInCoint,
+    InterceptTrendUnrestrictedInterceptRestrictedTrend,
 
     /// Model 4: 有截距項，有趨勢項，截距無法完全由協整解釋，趨勢無法完全由協整解釋
     /// μ_t = μ_0 + μ_1 t = μ_0 + (α ρ_1 t + α_⊥ γ_1) t
-    InterceptTrendNoTrendInCoint,
+    InterceptTrendUnrestrictedBoth,
 }
 
 #[allow(dead_code)]
@@ -32,9 +32,9 @@ impl JohansenModel {
         match self {
             JohansenModel::NoInterceptNoTrend => 0,
             JohansenModel::InterceptNoTrendWithInterceptInCoint => 1,
-            JohansenModel::InterceptNoTrendNoInterceptInCoint => 2,
-            JohansenModel::InterceptTrendWithTrendInCoint => 3,
-            JohansenModel::InterceptTrendNoTrendInCoint => 4,
+            JohansenModel::InterceptNoTrendUnrestrictedIntercept => 2,
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => 3,
+            JohansenModel::InterceptTrendUnrestrictedBoth => 4,
         }
     }
 
@@ -43,9 +43,9 @@ impl JohansenModel {
         match n {
             0 => Some(JohansenModel::NoInterceptNoTrend),
             1 => Some(JohansenModel::InterceptNoTrendWithInterceptInCoint),
-            2 => Some(JohansenModel::InterceptNoTrendNoInterceptInCoint),
-            3 => Some(JohansenModel::InterceptTrendWithTrendInCoint),
-            4 => Some(JohansenModel::InterceptTrendNoTrendInCoint),
+            2 => Some(JohansenModel::InterceptNoTrendUnrestrictedIntercept),
+            3 => Some(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend),
+            4 => Some(JohansenModel::InterceptTrendUnrestrictedBoth),
             _ => None,
         }
     }
@@ -57,13 +57,13 @@ impl JohansenModel {
             JohansenModel::InterceptNoTrendWithInterceptInCoint => {
                 "Intercept, no trend, intercept in cointegration"
             }
-            JohansenModel::InterceptNoTrendNoInterceptInCoint => {
+            JohansenModel::InterceptNoTrendUnrestrictedIntercept => {
                 "Intercept, no trend, intercept not fully explained by cointegration"
             }
-            JohansenModel::InterceptTrendWithTrendInCoint => {
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => {
                 "Intercept, trend, trend in cointegration"
             }
-            JohansenModel::InterceptTrendNoTrendInCoint => {
+            JohansenModel::InterceptTrendUnrestrictedBoth => {
                 "Intercept, trend, intercept and trend not fully explained by cointegration"
             }
         }
@@ -74,9 +74,9 @@ impl JohansenModel {
         match self {
             JohansenModel::NoInterceptNoTrend => false,
             JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptNoTrendNoInterceptInCoint
-            | JohansenModel::InterceptTrendWithTrendInCoint
-            | JohansenModel::InterceptTrendNoTrendInCoint => true,
+            | JohansenModel::InterceptNoTrendUnrestrictedIntercept
+            | JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
+            | JohansenModel::InterceptTrendUnrestrictedBoth => true,
         }
     }
 
@@ -85,9 +85,9 @@ impl JohansenModel {
         match self {
             JohansenModel::NoInterceptNoTrend
             | JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptNoTrendNoInterceptInCoint => false,
-            JohansenModel::InterceptTrendWithTrendInCoint
-            | JohansenModel::InterceptTrendNoTrendInCoint => true,
+            | JohansenModel::InterceptNoTrendUnrestrictedIntercept => false,
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
+            | JohansenModel::InterceptTrendUnrestrictedBoth => true,
         }
     }
 
@@ -97,9 +97,9 @@ impl JohansenModel {
         match self {
             JohansenModel::NoInterceptNoTrend => false, // 沒有截距項
             JohansenModel::InterceptNoTrendWithInterceptInCoint => true, // μ_t = α ρ_0
-            JohansenModel::InterceptNoTrendNoInterceptInCoint => false, // μ_t = α ρ_0 + α_⊥ γ_0
-            JohansenModel::InterceptTrendWithTrendInCoint => false, // μ_t = μ_0 + α ρ_1 t
-            JohansenModel::InterceptTrendNoTrendInCoint => false, // μ_t = μ_0 + (α ρ_1 + α_⊥ γ_1) t
+            JohansenModel::InterceptNoTrendUnrestrictedIntercept => false, // μ_t = α ρ_0 + α_⊥ γ_0
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => false, // μ_t = μ_0 + α ρ_1 t
+            JohansenModel::InterceptTrendUnrestrictedBoth => false, // μ_t = μ_0 + (α ρ_1 + α_⊥ γ_1) t
         }
     }
 
@@ -109,9 +109,9 @@ impl JohansenModel {
         match self {
             JohansenModel::NoInterceptNoTrend
             | JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptNoTrendNoInterceptInCoint => false, // 沒有趨勢項
-            JohansenModel::InterceptTrendWithTrendInCoint => true, // μ_t = μ_0 + α ρ_1 t
-            JohansenModel::InterceptTrendNoTrendInCoint => false, // μ_t = μ_0 + (α ρ_1 + α_⊥ γ_1) t
+            | JohansenModel::InterceptNoTrendUnrestrictedIntercept => false, // 沒有趨勢項
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => true, // μ_t = μ_0 + α ρ_1 t
+            JohansenModel::InterceptTrendUnrestrictedBoth => false, // μ_t = μ_0 + (α ρ_1 + α_⊥ γ_1) t
         }
     }
 
@@ -120,9 +120,9 @@ impl JohansenModel {
         [
             JohansenModel::NoInterceptNoTrend,
             JohansenModel::InterceptNoTrendWithInterceptInCoint,
-            JohansenModel::InterceptNoTrendNoInterceptInCoint,
-            JohansenModel::InterceptTrendWithTrendInCoint,
-            JohansenModel::InterceptTrendNoTrendInCoint,
+            JohansenModel::InterceptNoTrendUnrestrictedIntercept,
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend,
+            JohansenModel::InterceptTrendUnrestrictedBoth,
         ]
     }
 }
@@ -130,7 +130,7 @@ impl JohansenModel {
 impl Default for JohansenModel {
     /// 默認使用 Model 2（最常用的模型）
     fn default() -> Self {
-        JohansenModel::InterceptNoTrendNoInterceptInCoint
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept
     }
 }
 
