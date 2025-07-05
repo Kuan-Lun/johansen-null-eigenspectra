@@ -8,11 +8,11 @@ fn test_model_numbers() {
         1
     );
     assert_eq!(
-        JohansenModel::InterceptNoTrendNoInterceptInCoint.to_number(),
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept.to_number(),
         2
     );
-    assert_eq!(JohansenModel::InterceptTrendWithTrendInCoint.to_number(), 3);
-    assert_eq!(JohansenModel::InterceptTrendNoTrendInCoint.to_number(), 4);
+    assert_eq!(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.to_number(), 3);
+    assert_eq!(JohansenModel::InterceptTrendUnrestrictedBoth.to_number(), 4);
 }
 
 #[test]
@@ -27,15 +27,15 @@ fn test_from_number() {
     );
     assert_eq!(
         JohansenModel::from_number(2),
-        Some(JohansenModel::InterceptNoTrendNoInterceptInCoint)
+        Some(JohansenModel::InterceptNoTrendUnrestrictedIntercept)
     );
     assert_eq!(
         JohansenModel::from_number(3),
-        Some(JohansenModel::InterceptTrendWithTrendInCoint)
+        Some(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend)
     );
     assert_eq!(
         JohansenModel::from_number(4),
-        Some(JohansenModel::InterceptTrendNoTrendInCoint)
+        Some(JohansenModel::InterceptTrendUnrestrictedBoth)
     );
     assert_eq!(JohansenModel::from_number(5), None);
     assert_eq!(JohansenModel::from_number(255), None);
@@ -52,15 +52,15 @@ fn test_model_descriptions() {
         "Intercept, no trend, intercept in cointegration"
     );
     assert_eq!(
-        JohansenModel::InterceptNoTrendNoInterceptInCoint.description(),
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept.description(),
         "Intercept, no trend, intercept not fully explained by cointegration"
     );
     assert_eq!(
-        JohansenModel::InterceptTrendWithTrendInCoint.description(),
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.description(),
         "Intercept, trend, trend in cointegration"
     );
     assert_eq!(
-        JohansenModel::InterceptTrendNoTrendInCoint.description(),
+        JohansenModel::InterceptTrendUnrestrictedBoth.description(),
         "Intercept, trend, intercept and trend not fully explained by cointegration"
     );
 }
@@ -69,18 +69,18 @@ fn test_model_descriptions() {
 fn test_has_intercept() {
     assert!(!JohansenModel::NoInterceptNoTrend.has_intercept());
     assert!(JohansenModel::InterceptNoTrendWithInterceptInCoint.has_intercept());
-    assert!(JohansenModel::InterceptNoTrendNoInterceptInCoint.has_intercept());
-    assert!(JohansenModel::InterceptTrendWithTrendInCoint.has_intercept());
-    assert!(JohansenModel::InterceptTrendNoTrendInCoint.has_intercept());
+    assert!(JohansenModel::InterceptNoTrendUnrestrictedIntercept.has_intercept());
+    assert!(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.has_intercept());
+    assert!(JohansenModel::InterceptTrendUnrestrictedBoth.has_intercept());
 }
 
 #[test]
 fn test_has_trend() {
     assert!(!JohansenModel::NoInterceptNoTrend.has_trend());
     assert!(!JohansenModel::InterceptNoTrendWithInterceptInCoint.has_trend());
-    assert!(!JohansenModel::InterceptNoTrendNoInterceptInCoint.has_trend());
-    assert!(JohansenModel::InterceptTrendWithTrendInCoint.has_trend());
-    assert!(JohansenModel::InterceptTrendNoTrendInCoint.has_trend());
+    assert!(!JohansenModel::InterceptNoTrendUnrestrictedIntercept.has_trend());
+    assert!(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.has_trend());
+    assert!(JohansenModel::InterceptTrendUnrestrictedBoth.has_trend());
 }
 
 #[test]
@@ -91,14 +91,14 @@ fn test_intercept_fully_explained_by_cointegration() {
             .intercept_fully_explained_by_cointegration()
     );
     assert!(
-        !JohansenModel::InterceptNoTrendNoInterceptInCoint
+        !JohansenModel::InterceptNoTrendUnrestrictedIntercept
             .intercept_fully_explained_by_cointegration()
     );
     assert!(
-        !JohansenModel::InterceptTrendWithTrendInCoint.intercept_fully_explained_by_cointegration()
+        !JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.intercept_fully_explained_by_cointegration()
     );
     assert!(
-        !JohansenModel::InterceptTrendNoTrendInCoint.intercept_fully_explained_by_cointegration()
+        !JohansenModel::InterceptTrendUnrestrictedBoth.intercept_fully_explained_by_cointegration()
     );
 }
 
@@ -110,10 +110,10 @@ fn test_trend_fully_explained_by_cointegration() {
             .trend_fully_explained_by_cointegration()
     );
     assert!(
-        !JohansenModel::InterceptNoTrendNoInterceptInCoint.trend_fully_explained_by_cointegration()
+        !JohansenModel::InterceptNoTrendUnrestrictedIntercept.trend_fully_explained_by_cointegration()
     );
-    assert!(JohansenModel::InterceptTrendWithTrendInCoint.trend_fully_explained_by_cointegration());
-    assert!(!JohansenModel::InterceptTrendNoTrendInCoint.trend_fully_explained_by_cointegration());
+    assert!(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.trend_fully_explained_by_cointegration());
+    assert!(!JohansenModel::InterceptTrendUnrestrictedBoth.trend_fully_explained_by_cointegration());
 }
 
 #[test]
@@ -127,10 +127,10 @@ fn test_all_models() {
     );
     assert_eq!(
         all_models[2],
-        JohansenModel::InterceptNoTrendNoInterceptInCoint
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept
     );
-    assert_eq!(all_models[3], JohansenModel::InterceptTrendWithTrendInCoint);
-    assert_eq!(all_models[4], JohansenModel::InterceptTrendNoTrendInCoint);
+    assert_eq!(all_models[3], JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend);
+    assert_eq!(all_models[4], JohansenModel::InterceptTrendUnrestrictedBoth);
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn test_default() {
     let default_model = JohansenModel::default();
     assert_eq!(
         default_model,
-        JohansenModel::InterceptNoTrendNoInterceptInCoint
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept
     );
     assert_eq!(default_model.to_number(), 2);
 }
@@ -154,22 +154,22 @@ fn test_display() {
         "Model 1: Intercept, no trend, intercept in cointegration"
     );
     assert_eq!(
-        JohansenModel::InterceptNoTrendNoInterceptInCoint.to_string(),
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept.to_string(),
         "Model 2: Intercept, no trend, intercept not fully explained by cointegration"
     );
     assert_eq!(
-        JohansenModel::InterceptTrendWithTrendInCoint.to_string(),
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.to_string(),
         "Model 3: Intercept, trend, trend in cointegration"
     );
     assert_eq!(
-        JohansenModel::InterceptTrendNoTrendInCoint.to_string(),
+        JohansenModel::InterceptTrendUnrestrictedBoth.to_string(),
         "Model 4: Intercept, trend, intercept and trend not fully explained by cointegration"
     );
 }
 
 #[test]
 fn test_clone_copy_traits() {
-    let model = JohansenModel::InterceptNoTrendNoInterceptInCoint;
+    let model = JohansenModel::InterceptNoTrendUnrestrictedIntercept;
     let cloned = model.clone();
     let copied = model;
 
@@ -179,9 +179,9 @@ fn test_clone_copy_traits() {
 
 #[test]
 fn test_debug_trait() {
-    let model = JohansenModel::InterceptNoTrendNoInterceptInCoint;
+    let model = JohansenModel::InterceptNoTrendUnrestrictedIntercept;
     let debug_str = format!("{:?}", model);
-    assert_eq!(debug_str, "InterceptNoTrendNoInterceptInCoint");
+    assert_eq!(debug_str, "InterceptNoTrendUnrestrictedIntercept");
 }
 
 #[test]
@@ -200,19 +200,19 @@ fn test_comprehensive_model_properties() {
     assert!(model1.intercept_fully_explained_by_cointegration());
     assert!(!model1.trend_fully_explained_by_cointegration());
 
-    let model2 = JohansenModel::InterceptNoTrendNoInterceptInCoint;
+    let model2 = JohansenModel::InterceptNoTrendUnrestrictedIntercept;
     assert!(model2.has_intercept());
     assert!(!model2.has_trend());
     assert!(!model2.intercept_fully_explained_by_cointegration());
     assert!(!model2.trend_fully_explained_by_cointegration());
 
-    let model3 = JohansenModel::InterceptTrendWithTrendInCoint;
+    let model3 = JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend;
     assert!(model3.has_intercept());
     assert!(model3.has_trend());
     assert!(!model3.intercept_fully_explained_by_cointegration());
     assert!(model3.trend_fully_explained_by_cointegration());
 
-    let model4 = JohansenModel::InterceptTrendNoTrendInCoint;
+    let model4 = JohansenModel::InterceptTrendUnrestrictedBoth;
     assert!(model4.has_intercept());
     assert!(model4.has_trend());
     assert!(!model4.intercept_fully_explained_by_cointegration());
