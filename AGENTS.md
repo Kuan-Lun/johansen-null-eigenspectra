@@ -6,92 +6,57 @@ This document contains information about AI agents and automated tools used in t
 
 Document AI agent interactions, configurations, and best practices for maintaining and developing the Johansen Null Eigenspectra project.
 
-## Agent Guidelines
+## Agent Guidelines Index
 
-### Code Generation
+本文檔已分割為多個專門化的指導文件，以減少上下文閱讀量並便於添加詳細要求。AI Agent 應根據具體任務類型閱讀相應的指導文件：
 
-- Follow Rust best practices and conventions
-- Maintain consistency with existing codebase style
-- Ensure thread safety in parallel computations
-- Write code comments in Chinese for internal documentation
-- Use English for all user-facing messages, error messages, and CLI output
-- Follow SOLID principles for clean and maintainable code design
+### 依任務類型分類的指導文件
 
-### Testing
+- **[程式碼產生與實作](./.agents/code-generation.md)** - 用於程式碼編寫、重構、新功能實作
+- **[測試相關](./.agents/testing.md)** - 用於編寫測試、驗證功能、測試驅動開發
+- **[Git 工作流程](./.agents/git-workflow.md)** - 用於版本控制、分支管理、提交訊息
+- **[檔案編寫](./.agents/documentation.md)** - 用於檔案更新、API 檔案、註解規範
+- **[效能優化](./.agents/performance.md)** - 用於效能分析、優化建議、基準測試
 
-- Write comprehensive tests for new functionality
-- Maintain test coverage for statistical computations
-- Validate numerical accuracy of eigenvalue calculations
-- Place tests in the `tests/` directory, not inline within `src/` files
-- Follow the existing test structure with module-specific test directories
+### 使用指南
 
-### Documentation
+1. **識別任務類型** - 確定當前任務屬於哪個類別
+2. **閱讀對應指導** - 只閱讀相關的指導文件，減少不必要的上下文
+3. **遵循具體規範** - 依照專門指導文件中的詳細要求執行
+4. **組合使用** - 複雜任務可能需要參考多個指導文件
 
-- Keep documentation up to date with code changes
-- Provide clear examples for usage
-- Document breaking changes and migration paths
-- Do not use emoji symbols in any documentation or commit messages
+## 通用原則
 
-### Security & Dependencies
+### 項目特性
 
-- Keep dependencies up to date and audit for vulnerabilities
-- Use minimal dependencies and prefer well-maintained crates
-- Review dependency licenses for compatibility
+- Johansen 協整檢定的統計計算項目
+- 使用 Rust 程式語言
+- 重視數值精度和計算性能
+- 支援大規模 Monte Carlo 模擬
 
-### Error Handling
+### 程式碼品質要求
 
-- Use appropriate Rust error handling patterns (Result, Option)
-- Provide meaningful error messages in English for users
-- Log detailed error information in Chinese for debugging
-- Implement graceful error recovery where possible
+- 執行 `cargo fmt` 和 `cargo clippy`
+- 確保所有程式碼通過 `cargo check` 無警告
+- 遵循 Rust 最佳實踐
+- 保持與現有程式碼風格一致
 
-### Code Quality
+### 語言使用規範
 
-- Run `cargo fmt` before committing to ensure consistent formatting
-- Use `cargo clippy` to catch common mistakes and improve code quality
-- Ensure all code passes `cargo check` without warnings
-- Write self-documenting code with clear variable and function names
+- **使用者界面與錯誤訊息**: 英文
+- **內部代碼註解**: 繁體中文
+- **文件註解（API）**: 英文
+- **Git 提交訊息**: 英文
 
-### Project-Specific Requirements
+## 更新指南
 
-- Understand the statistical nature of Johansen cointegration tests
-- Maintain numerical precision in eigenvalue calculations
-- Ensure reproducibility of simulation results using consistent random seeds
-- Handle large-scale data efficiently for Monte Carlo simulations
+當需要增加新的指導內容時：
 
-## Development Workflow
-
-### Git Workflow
-
-- Use English names for all branches (no Chinese characters)
-- Follow conventional branch naming patterns (e.g., `feature/`, `fix/`, `refactor/`)
-- Use descriptive but concise branch names
-- Before writing commit messages, execute the following commands in sequence:
-  1. `git log --oneline -30` - Understand the overall commit message format and style patterns
-  2. `git log -15` - Study detailed commit message writing techniques and conventions
-  3. `git status` - Confirm the list of changed files and their status
-  4. `git diff <file>` - Examine specific changes in each file to be committed
-- Write commit messages based on the actual file differences and modifications discovered through git diff
-- When multiple files are modified, group related changes by type (feat, fix, docs, style, refactor, test, chore) for atomic commits
-- Always include scope in commit messages using format: `<type>[scope]: <description>`
-- Use meaningful scopes that indicate the affected module or component
-- For modifications involving multiple types, create a temporary branch first, complete all code changes, then merge back
-- Only delete branches that were created by the AI agent, never delete user-created branches
-- Follow the workflow: create temp branch → implement changes → commit by type → merge → cleanup AI-created branch only
-
-### Code Review
-
-- Verify statistical correctness of implementations
-- Check performance implications of changes
-- Do not enforce backward compatibility unless explicitly requested
-- Focus on code quality and performance over legacy support
-
-### Performance Considerations
-
-- Profile computation-heavy operations
-- Optimize memory usage for large-scale simulations
-- Consider SIMD optimizations where applicable
+1. 確定內容歸屬的類別
+2. 更新對應的專門指導文件
+3. 如需要新類別，建立新的指導文件
+4. 在本文件中新增索引鏈接
 
 ## Notes
 
-This file serves as a reference for AI agents working on this project to maintain consistency and quality standards.
+This modular approach allows AI agents to focus on specific task-related guidelines, improving efficiency and reducing context overhead while maintaining comprehensive coverage of project requirements.
