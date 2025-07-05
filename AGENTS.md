@@ -14,7 +14,13 @@ Document AI agent interactions, configurations, and best practices for maintaini
 
 - **[程式碼生成與實作](./.agents/code-generation.md)** - 用於程式碼編寫、重構、新功能實作
 - **[測試相關](./.agents/testing.md)** - 用於編寫測試、驗證功能、測試驅動開發
-- **[Git 工作流程](./.agents/git-workflow.md)** - 用於版本控制、分支管理、提交訊息
+- **Git 工作流程** - 用於版本控制、分支管理、提交訊息
+  - [分支管理](./.agents/git-workflow/branch-management.md)
+  - [提交訊息規範](./.agents/git-workflow/commit-guidelines.md)
+  - [版本更新](./.agents/git-workflow/version-update.md)
+  - [程式碼審查準備](./.agents/git-workflow/code-review.md)
+  - [協作規範](./.agents/git-workflow/collaboration.md)
+  - [特殊注意事項](./.agents/git-workflow/special-notes.md)
 - **[文件編寫](./.agents/documentation.md)** - 用於文件更新、API 文件、註解規範
 - **[效能最佳化](./.agents/performance.md)** - 用於效能分析、最佳化建議、基準測試
 
