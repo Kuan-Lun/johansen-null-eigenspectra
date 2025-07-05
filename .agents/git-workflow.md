@@ -201,4 +201,8 @@ git branch -d temp/ai-refactor
 
 ### 版本更新
 
-- 更新 `Cargo.toml` 中的 `version` 時，必須在 `.github/releases` 目錄新增對應版本的說明檔
+- 更新 `Cargo.toml` 中的 `version` 時，必須先執行以下命令檢查自上一版本以來的所有實際變化：
+  1. `git log --oneline v{上一版本}..HEAD` - 查看提交摘要
+  2. `git tag --list | grep v{上一版本}` - 確認版本標籤存在
+  3. `git show --stat v{上一版本}..{版本更新前的最後提交}` - 查看詳細變更統計
+  然後在 `.github/releases` 目錄新增對應版本的詳細說明檔，內容必須基於這些實際的 git 提交記錄和程式碼變化
