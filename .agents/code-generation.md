@@ -1,62 +1,73 @@
-# Agents
+# Code Generation Guidelines
 
-This document contains information about AI agents and automated tools used in this project.
+本文件為程式碼生成相關的 AI Agent 提供詳細指導。
 
-## Purpose
+## Rust 程式設計規範
 
-Document AI agent interactions, configurations, and best practices for maintaining and developing the Johansen Null Eigenspectra project.
+### 基本原則
 
-## Agent Guidelines Index
+- 遵循 Rust 最佳實作和慣例
+- 保持與現有程式碼庫風格的一致性
+- 確保並行計算中的執行緒安全
+- 遵循 SOLID 原則進行清潔和可維護的程式碼設計
 
-本文檔已分割為多個專門化的指導文件，以減少上下文閱讀量並便於添加詳細要求。 AI Agent 應根據具體任務類型閱讀相應的指導文件：
+### 程式碼註解規範
 
-### 依任務類型分類的指導文件
+- 內部文件和程式碼註解使用繁體中文
+- 使用者介面訊息、錯誤訊息和 CLI 輸出使用英文
+- 函數和模組的文件註解（doc comments）使用英文
 
-- **[程式碼產生與實作](./agents/code-generation.md)** - 用於程式碼編寫、重構、新功能實作
-- **[測試相關](./agents/testing.md)** - 用於編寫測試、驗證功能、測試驅動開發
-- **[Git 工作流程](./agents/git-workflow.md)** - 用於版本控制、分支管理、提交訊息
-- **[檔案編寫](./agents/documentation.md)** - 用於檔案更新、API 檔案、註解規範
-- **[效能優化](./agents/performance.md)** - 用於效能分析、優化建議、基準測試
+### 錯誤處理
 
-### 使用指南
-
-1. **識別任務類型** - 確定當前任務屬於哪個類別
-2. **閱讀對應指導** - 只閱讀相關的指導文件，減少不必要的上下文
-3. **遵循具體規範** - 依照專門指導文件中的詳細要求執行
-4. **組合使用** - 複雜任務可能需要參考多個指導文件
-
-## 通用原則
-
-### 項目特性
-
-- Johansen 協整檢定的統計計算項目
-- 使用 Rust 程式語言
-- 重視數值精度和計算性能
-- 支援大規模 Monte Carlo 模擬
+- 使用合適的 Rust 錯誤處理模式（Result, Option）
+- 為使用者提供有意義的英文錯誤訊息
+- 為除錯記錄詳細的繁體中文錯誤資訊
+- 在可能的地方實作優雅的錯誤復原
 
 ### 程式碼品質要求
 
-- 執行 `cargo fmt` 和 `cargo clippy`
-- 確保所有程式碼通過 `cargo check` 無警告
-- 遵循 Rust 最佳實踐
-- 保持與現有程式碼風格一致
+- 提交前執行 `cargo fmt` 確保格式一致
+- 使用 `cargo clippy` 捕獲常見錯誤並提高程式碼品質
+- 確保所有程式碼通過 `cargo check` 且無警告
+- 編寫自文件化的程式碼，使用清晰的變數和函數名
 
-### 語言使用規範
+## 專案特定要求
 
-- **使用者界面與錯誤訊息**: 英文
-- **內部代碼註解**: 繁體中文
-- **文件註解（API）**: 英文
-- **Git 提交訊息**: 英文
+### 統計計算
 
-## 更新指南
+- 理解 Johansen 協整檢驗的統計性質
+- 在特徵值計算中保持數值精度
+- 使用一致的隨機種子確保模擬結果的可重複性
+- 高效處理蒙特卡洛模擬的大規模資料
 
-當需要增加新的指導內容時：
+### 效能考慮
 
-1. 確定內容歸屬的類別
-2. 更新對應的專門指導文件
-3. 如需要新類別，建立新的指導文件
-4. 在本文件中新增索引鏈接
+- 對計算密集型操作進行效能分析
+- 最佳化大規模模擬的記憶體使用
+- 在適用的地方考慮 SIMD 最佳化
 
-## Notes
+### 依賴管理
 
-This modular approach allows AI agents to focus on specific task-related guidelines, improving efficiency and reducing context overhead while maintaining comprehensive coverage of project requirements.
+- 保持依賴項的最新狀態並審核漏洞
+- 使用最少的依賴項，優先選擇維護良好的 crate
+- 審查依賴項許可證的相容性
+
+## 實作指導
+
+### 執行緒安全
+
+- 在多執行緒環境中確保資料結構的安全存取
+- 正確使用 Rust 的所有權系統避免資料競爭
+- 優先使用 Rust 標準函式庫的並行原語
+
+### 記憶體管理
+
+- 避免不必要的記憶體分配
+- 使用適當的資料結構最佳化記憶體配置
+- 考慮使用 `Box`, `Rc`, `Arc` 等智慧指標的場景
+
+### 模組設計
+
+- 保持模組的單一職責
+- 合理設計公共介面
+- 使用適當的可見性修飾符
