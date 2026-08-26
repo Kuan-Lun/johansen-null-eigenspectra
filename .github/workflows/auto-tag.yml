@@ -1,0 +1,77 @@
+name: Auto Tag
+
+# 當 master 上的 Cargo.toml 版本號更新後，自動建立對應的 v{version} tag
+# 並派發 release workflow。冪等：tag 已存在時直接跳過。
+#
+# 注意：以 GITHUB_TOKEN 推送的 tag 不會觸發其他 workflow（GitHub 遞迴防護），
+# 因此最後以 workflow_dispatch（官方允許的例外）明確派發 release.yml。
+
+on:
+  push:
+    branches: [master]
+    paths: ['Cargo.toml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要完整歷史與 tag 才能判斷版本是否已發布
+
+      - name: Read version from Cargo.toml
+        id: version
+        run: echo "version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag already exists
+        id: tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.version.outputs.version }} already exists; nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require release notes
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          NOTES=".github/releases/RELEASE_NOTES_v${{ steps.version.outputs.version }}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::$NOTES not found. Run the release skill (.agents/skills/release/SKILL.md) to generate release notes before bumping the version."
+            exit 1
+          fi
+
+      - name: Install Rust
+        if: steps.tag.outputs.exists == 'false'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install LAPACK
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y liblapack-dev libopenblas-dev gfortran
+
+      - name: Run tests
+        if: steps.tag.outputs.exists == 'false'
+        run: cargo test
+
+      - name: Create and push tag
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Dispatch release workflow
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "v${{ steps.version.outputs.version }}"
