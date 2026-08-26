@@ -11,7 +11,10 @@ fn test_model_numbers() {
         JohansenModel::InterceptNoTrendUnrestrictedIntercept.to_number(),
         2
     );
-    assert_eq!(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.to_number(), 3);
+    assert_eq!(
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.to_number(),
+        3
+    );
     assert_eq!(JohansenModel::InterceptTrendUnrestrictedBoth.to_number(), 4);
 }
 
@@ -95,7 +98,8 @@ fn test_intercept_fully_explained_by_cointegration() {
             .intercept_fully_explained_by_cointegration()
     );
     assert!(
-        !JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.intercept_fully_explained_by_cointegration()
+        !JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
+            .intercept_fully_explained_by_cointegration()
     );
     assert!(
         !JohansenModel::InterceptTrendUnrestrictedBoth.intercept_fully_explained_by_cointegration()
@@ -110,10 +114,16 @@ fn test_trend_fully_explained_by_cointegration() {
             .trend_fully_explained_by_cointegration()
     );
     assert!(
-        !JohansenModel::InterceptNoTrendUnrestrictedIntercept.trend_fully_explained_by_cointegration()
+        !JohansenModel::InterceptNoTrendUnrestrictedIntercept
+            .trend_fully_explained_by_cointegration()
     );
-    assert!(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend.trend_fully_explained_by_cointegration());
-    assert!(!JohansenModel::InterceptTrendUnrestrictedBoth.trend_fully_explained_by_cointegration());
+    assert!(
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
+            .trend_fully_explained_by_cointegration()
+    );
+    assert!(
+        !JohansenModel::InterceptTrendUnrestrictedBoth.trend_fully_explained_by_cointegration()
+    );
 }
 
 #[test]
@@ -129,7 +139,10 @@ fn test_all_models() {
         all_models[2],
         JohansenModel::InterceptNoTrendUnrestrictedIntercept
     );
-    assert_eq!(all_models[3], JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend);
+    assert_eq!(
+        all_models[3],
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
+    );
     assert_eq!(all_models[4], JohansenModel::InterceptTrendUnrestrictedBoth);
 }
 
@@ -170,7 +183,7 @@ fn test_display() {
 #[test]
 fn test_clone_copy_traits() {
     let model = JohansenModel::InterceptNoTrendUnrestrictedIntercept;
-    let cloned = model.clone();
+    let cloned = model;
     let copied = model;
 
     assert_eq!(model, cloned);
