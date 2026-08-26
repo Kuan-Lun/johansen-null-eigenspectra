@@ -1,7 +1,7 @@
 use crate::matrix_utils::{CumsumOrder, dmatrix_cumsum};
 
 use nalgebra::DMatrix;
-use rand::Rng;
+use rand::RngExt;
 use rand::SeedableRng;
 use rand_distr::Distribution;
 use rand_distr::StandardNormal;

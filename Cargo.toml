@@ -4,14 +4,18 @@ version = "0.8.0"
 edition = "2024"
 
 [dependencies]
-rand = "0.9.1"
-rand_distr = "0.5.1"
+rand = "0.10.2"
+rand_distr = "0.6.0"
+# 使用 git 版而非 crates.io 發行版：正式版的 nalgebra-lapack 強制依賴
+# lapack-src provider（需 cmake/gfortran 源碼編譯）；git master 提供
+# lapack-custom feature，允許透過 .cargo/config.toml 外部連結系統 LAPACK
+# （macOS 用 Accelerate、Linux 用系統 liblapack，詳見 LAPACK_SETUP.md）
 nalgebra = { git = "https://github.com/dimforge/nalgebra", package = "nalgebra", default-features = false }
-nalgebra-lapack = { git = "https://github.com/dimforge/nalgebra", package = "nalgebra-lapack", default-features = false }
-rand_xoshiro = "0.7.0"
-rayon = "1.10.0"
+nalgebra-lapack = { git = "https://github.com/dimforge/nalgebra", package = "nalgebra-lapack", default-features = false, features = ["lapack-custom"] }
+rand_xoshiro = "0.8.1"
+rayon = "1.12.0"
 num_cpus = "1.17.0"
-sha2 = "0.10"
+sha2 = "0.11.0"
 
 [profile.release]
 # 啟用鏈接時優化 (LTO) - 會增加編譯時間但提高運行性能
