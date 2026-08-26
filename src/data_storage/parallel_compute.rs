@@ -2,12 +2,15 @@
 //!
 //! rayon worker 計算完成後直接以定位寫入將結果寫進各自的槽位
 //! （槽位互不重疊，無需鎖），取代舊版的 channel + 寫入執行緒架構。
-//! 以批次為單位同步落盤並回報進度。
+//! 以批次為單位同步落盤並回報進度；批次大小依實測耗時
+//! 向目標批次時間自適應收斂（見 `config` 模組的批次常數）。
 
 use rayon::prelude::*;
 use std::time::Instant;
 
-use super::config::BATCH_SIZE;
+use super::config::{
+    BATCH_FLOOR_PER_THREAD, BATCH_SMOOTHING, CHECKPOINT_DIVISOR, TARGET_BATCH_SECS,
+};
 use super::error::StorageError;
 use super::simulation::EigenvalueSimulation;
 use super::writer::{OpenResult, SlotWriter};
@@ -75,7 +78,16 @@ fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), Storage
     let total_remaining = remaining_seeds.len();
     let mut processed = 0usize;
 
-    for chunk in remaining_seeds.chunks(BATCH_SIZE) {
+    // 批次大小界限：上限由任務規模導出，下限由機器規模導出，衝突時上限優先
+    let batch_max = simulation.num_runs.div_ceil(CHECKPOINT_DIVISOR).max(1);
+    let batch_min = (rayon::current_num_threads() * BATCH_FLOOR_PER_THREAD).min(batch_max);
+    let mut batch_size = batch_min;
+
+    while processed < total_remaining {
+        let chunk_end = (processed + batch_size).min(total_remaining);
+        let chunk = &remaining_seeds[processed..chunk_end];
+        let batch_start = Instant::now();
+
         // 並行計算並直接寫入各自的槽位
         chunk.par_iter().try_for_each(|&seed| {
             let eigenvalues =
@@ -85,7 +97,13 @@ fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), Storage
 
         // 每批落盤一次：斷電最多損失最近一批，由 CRC 掃描偵測後重算
         writer.sync()?;
-        processed += chunk.len();
+        processed = chunk_end;
+
+        // 依實測耗時向目標批次時間修正下一批的大小
+        let measured_secs = batch_start.elapsed().as_secs_f64().max(1e-9);
+        let correction = TARGET_BATCH_SECS / measured_secs;
+        let next = batch_size as f64 * (1.0 - BATCH_SMOOTHING + BATCH_SMOOTHING * correction);
+        batch_size = (next.round() as usize).clamp(batch_min, batch_max);
 
         if !quiet {
             let current_total = completed_runs + processed;
