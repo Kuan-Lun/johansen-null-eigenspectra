@@ -1,232 +1,109 @@
-use super::config::BATCH_SIZE;
-use super::progress::{check_append_progress, get_remaining_seeds};
-use super::reader::read_append_file;
-use super::simulation::EigenvalueSimulation;
-use super::thread_manager::spawn_append_writer_thread;
-use crate::display_utils::format_number_with_commas;
-use crate::johansen_models::JohansenModel;
-use crate::johansen_statistics::calculate_eigenvalues;
+//! Parallel simulation engine.
+//!
+//! rayon worker 計算完成後直接以定位寫入將結果寫進各自的槽位
+//! （槽位互不重疊，無需鎖），取代舊版的 channel + 寫入執行緒架構。
+//! 以批次為單位同步落盤並回報進度。
+
 use rayon::prelude::*;
-use std::sync::mpsc;
-use std::thread;
+use std::time::Instant;
 
-/// 使用指定seeds進行並行計算
-fn calculate_eigenvalues_parallel(
-    dim: usize,
-    steps: usize,
-    seeds: &[u32],
-    model: JohansenModel,
-    sender: mpsc::Sender<(u32, Vec<f64>)>,
-    quiet: bool,
-) {
-    let chunk_size = BATCH_SIZE;
-    let total_seeds = seeds.len();
-    let total_chunks = total_seeds.div_ceil(chunk_size);
+use super::config::BATCH_SIZE;
+use super::error::StorageError;
+use super::simulation::EigenvalueSimulation;
+use super::writer::{OpenResult, SlotWriter};
+use crate::display_utils::{format_number_with_commas, format_remaining_time};
+use crate::johansen_statistics::calculate_eigenvalues;
 
-    for chunk_idx in 0..total_chunks {
-        let chunk_start = chunk_idx * chunk_size;
-        let chunk_end = ((chunk_idx + 1) * chunk_size).min(total_seeds);
-        let chunk_seeds = &seeds[chunk_start..chunk_end];
-
-        // 並行計算這個chunk的結果
-        chunk_seeds.into_par_iter().for_each(|&seed| {
-            let eigenvalues = calculate_eigenvalues(dim, steps, seed, model);
-
-            // 發送結果給寫入執行緒
-            if sender.send((seed, eigenvalues)).is_err() && !quiet {
-                eprintln!("Failed to send results to writer thread");
-            }
-        });
-    }
-}
-
-/// 驗證檔案寫入結果
-fn validate_output_file(filename: &str, expected_count: usize) {
-    match read_append_file(filename) {
-        Ok((loaded_data, _model, _dim, _steps)) => {
-            if loaded_data.len() == expected_count {
-                println!("SUCCESS: append file validation successful");
-            } else {
-                println!(
-                    "ERROR: append file validation failed: data length mismatch (expected: {}, actual: {})",
-                    expected_count,
-                    loaded_data.len()
-                );
-            }
-        }
-        Err(e) => {
-            // 對於魔術標頭不匹配這類嚴重的文件格式錯誤，應該 panic
-            if e.to_string()
-                .contains("File format error: magic header mismatch")
-            {
-                panic!("CRITICAL ERROR: File format incompatibility detected - {e}");
-            } else {
-                println!("ERROR: failed to read append file: {e}");
-            }
-        }
-    }
-}
-
-/// 輸出模型資訊
-fn display_model_info(simulation: &EigenvalueSimulation, quiet: bool) {
+/// 支援斷點續傳的單一模型模擬計算
+pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
     if !quiet {
         println!(
             "Using model: {} (supports resuming from checkpoint)",
             simulation.model
         );
     }
-}
 
-/// 讀取進度並輸出狀態
-fn load_progress(
-    simulation: &EigenvalueSimulation,
-    filename: &str,
-    quiet: bool,
-) -> std::io::Result<(usize, Vec<u32>)> {
-    let (completed_runs, completed_seeds) = check_append_progress(
-        filename,
-        simulation.model.to_number(),
-        simulation.dim as u8,
-        simulation.steps as u32,
-    )?;
-
-    if completed_runs > 0 && !quiet {
-        let max_completed_seed = completed_seeds.iter().max().copied().unwrap_or(0);
-        let min_completed_seed = completed_seeds.iter().min().copied().unwrap_or(0);
-        println!(
-            "Detected {} completed out of {} calculations, Seeds range: {}-{}",
-            format_number_with_commas(completed_runs),
-            format_number_with_commas(simulation.num_runs),
-            format_number_with_commas(min_completed_seed as usize),
-            format_number_with_commas(max_completed_seed as usize)
-        );
-    }
-
-    Ok((completed_runs, completed_seeds))
-}
-
-/// 啟動寫入執行緒
-fn start_writer_thread(
-    filename: String,
-    simulation: &EigenvalueSimulation,
-    completed_runs: usize,
-    receiver: mpsc::Receiver<(u32, Vec<f64>)>,
-    quiet: bool,
-) -> thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
-    let writer_config = crate::data_storage::thread_manager::WriterConfig {
-        filename,
-        total_runs: simulation.num_runs,
-        completed_runs,
-        dim: simulation.dim,
-        steps: simulation.steps,
-        model: simulation.model,
-        quiet,
-    };
-    spawn_append_writer_thread(writer_config, receiver)
-}
-
-/// 等待寫入執行緒結束
-fn wait_for_writer(
-    writer_handle: thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
-    filename: &str,
-    quiet: bool,
-) {
-    match writer_handle.join() {
-        Ok(Ok(())) => {
-            if !quiet {
-                println!("Saved to {filename}");
+    let mut recreated = false;
+    loop {
+        match try_run(simulation, quiet) {
+            Ok(()) => break,
+            Err(e) if e.is_recreatable() && !recreated => {
+                // 檔案格式或參數不相容：資料可由 seed 重算，刪除後重建一次
+                if !quiet {
+                    println!("WARNING: Existing file is incompatible ({e})");
+                    println!("  The file will be removed and recreated with correct parameters.");
+                }
+                simulation.remove_data_files();
+                recreated = true;
             }
+            Err(e) => panic!("Simulation failed: {e}"),
         }
-        Ok(Err(e)) => {
-            panic!("Writer thread error: {e}");
-        }
-        Err(_) => {
-            panic!("Writer thread panic");
-        }
+    }
+
+    if !quiet {
+        println!("===============================\n");
     }
 }
 
-/// 支援斷點續傳的單一模型模擬計算
-pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
-    display_model_info(simulation, quiet);
-
+/// 單次嘗試：打開（或建立）檔案並補齊缺少的槽位
+fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), StorageError> {
     let filename = simulation.get_filename(simulation.model);
 
-    let (completed_runs, completed_seeds) = match load_progress(simulation, &filename, quiet) {
-        Ok(res) => res,
-        Err(e) => {
-            let error_msg = e.to_string();
-            if error_msg.contains("mismatch") {
+    let (writer, remaining_seeds, completed_runs) =
+        match SlotWriter::open(&filename, simulation.file_header(), quiet)? {
+            OpenResult::AlreadyComplete => {
                 if !quiet {
-                    println!("WARNING: Existing file has incompatible parameters:");
-                    println!("  {error_msg}");
-                    println!(
-                        "  The existing file will be removed and recreated with correct parameters."
-                    );
+                    println!("SUCCESS: calculation for this model already completed, skipping");
                 }
-                if let Err(remove_err) = std::fs::remove_file(&filename) {
-                    if !quiet {
-                        println!("WARNING: Failed to remove incompatible file: {remove_err}");
-                    }
-                }
-                if !quiet {
-                    println!("Starting fresh calculation with correct parameters...");
-                }
-                return run_model_simulation(simulation, quiet);
-            } else {
-                panic!("Failed to check progress: {e}");
+                return Ok(());
             }
-        }
-    };
-
-    if completed_runs >= simulation.num_runs {
-        if !quiet {
-            println!("SUCCESS: calculation for this model already completed, skipping");
-            println!("===============================\n");
-        }
-        return;
-    }
-
-    let remaining_seeds = get_remaining_seeds(simulation.num_runs, &completed_seeds);
-    let remaining_count = remaining_seeds.len();
-
-    if remaining_count == 0 {
-        if !quiet {
-            println!("SUCCESS: calculation for this model already completed");
-            println!("===============================\n");
-        }
-        return;
-    }
+            OpenResult::InProgress {
+                writer,
+                remaining_seeds,
+                completed_runs,
+            } => (writer, remaining_seeds, completed_runs),
+        };
 
     if !quiet {
         println!(
             "Remaining {} calculations to complete",
-            format_number_with_commas(remaining_count)
+            format_number_with_commas(remaining_seeds.len())
         );
     }
 
-    let (sender, receiver) = mpsc::channel::<(u32, Vec<f64>)>();
-    let writer_handle = start_writer_thread(
-        filename.clone(),
-        simulation,
-        completed_runs,
-        receiver,
-        quiet,
-    );
+    let start_time = Instant::now();
+    let total_remaining = remaining_seeds.len();
+    let mut processed = 0usize;
 
-    calculate_eigenvalues_parallel(
-        simulation.dim,
-        simulation.steps,
-        &remaining_seeds,
-        simulation.model,
-        sender,
-        quiet,
-    );
+    for chunk in remaining_seeds.chunks(BATCH_SIZE) {
+        // 並行計算並直接寫入各自的槽位
+        chunk.par_iter().try_for_each(|&seed| {
+            let eigenvalues =
+                calculate_eigenvalues(simulation.dim, simulation.steps, seed, simulation.model);
+            writer.write_slot(seed, &eigenvalues)
+        })?;
 
-    wait_for_writer(writer_handle, &filename, quiet);
+        // 每批落盤一次：斷電最多損失最近一批，由 CRC 掃描偵測後重算
+        writer.sync()?;
+        processed += chunk.len();
+
+        if !quiet {
+            let current_total = completed_runs + processed;
+            let progress_ratio = current_total as f64 / simulation.num_runs as f64;
+            println!(
+                "Simulation progress: {}/{} ({:.2}%) - {}",
+                format_number_with_commas(current_total),
+                format_number_with_commas(simulation.num_runs),
+                progress_ratio * 100.0,
+                format_remaining_time(start_time.elapsed(), processed, total_remaining)
+            );
+        }
+    }
+
+    writer.finish()?;
 
     if !quiet {
-        validate_output_file(&filename, simulation.num_runs);
-        println!("===============================\n");
+        println!("Saved to {filename}");
     }
+    Ok(())
 }

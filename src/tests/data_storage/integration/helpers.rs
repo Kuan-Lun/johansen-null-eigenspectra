@@ -1,68 +1,56 @@
 use super::*;
+use crate::data_storage::file_format::{
+    HEADER_SIZE, STATUS_IN_PROGRESS, STATUS_OFFSET, crc_path, hash_path,
+};
+use std::io::{Read, Seek, SeekFrom, Write};
 
-/// 重寫追加格式檔案的測試輔助函數
-pub fn rewrite_append_file(
-    filename: &str,
-    data: &[(u32, Vec<f64>)],
-    model: u8,
-    dim: u8,
-    steps: u32,
-) -> std::io::Result<()> {
-    // 刪除舊檔案
-    let _ = std::fs::remove_file(filename);
-
-    // 使用追加寫入器重建檔案
-    let mut writer = AppendOnlyWriter::with_expected_size(filename, None, model, dim, steps, true)?;
-
-    for (seed, eigenvalues) in data {
-        writer.append_eigenvalues(*seed, eigenvalues)?;
-    }
-
-    writer.finish()
-}
-
-/// 從檔案中移除指定的seed數據（測試用）
+/// 將指定 seeds 的槽位清為零，模擬中斷後缺漏的資料（測試用）。
+///
+/// V7 格式下「移除一筆資料」= 把該 seed 的槽位歸零。同時把檔案狀態
+/// 改回進行中，並移除已失效的 CRC sidecar 與整檔雜湊檔，讓後續的
+/// `run_simulation()` 走斷點續傳路徑重算這些 seeds。
 pub fn remove_seed_from_file(
     simulation: &EigenvalueSimulation,
     model: JohansenModel,
     seeds_to_remove: &[u32],
 ) -> std::io::Result<usize> {
     let filename = simulation.get_filename(model);
-
-    if !std::path::Path::new(&filename).exists() {
+    let path = std::path::Path::new(&filename);
+    if !path.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "檔案不存在",
+            "data file not found",
         ));
     }
 
-    // 讀取現有數據並排序
-    let mut data = simulation.read_data()?;
-    data.sort_by_key(|(seed, _)| *seed);
-    let original_count = data.len();
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?;
 
-    // 過濾掉指定的seeds
-    let filtered_data: Vec<(u32, Vec<f64>)> = data
-        .into_iter()
-        .filter(|(seed, _)| !seeds_to_remove.contains(seed))
-        .collect();
+    // 直接解析 V7 header 的必要欄位（同時作為磁碟布局的迴歸驗證）
+    let mut header = [0u8; HEADER_SIZE as usize];
+    file.read_exact(&mut header)?;
+    let num_runs = u64::from_le_bytes(header[18..26].try_into().unwrap());
+    let slot_size = header[26] as u64 * 8;
 
-    let removed_count = original_count - filtered_data.len();
-
-    if removed_count > 0 {
-        // 備份原檔案
-        let backup_filename = format!("{}.test_backup", filename);
-        std::fs::copy(&filename, &backup_filename)?;
-
-        // 重寫檔案
-        rewrite_append_file(
-            &filename,
-            &filtered_data,
-            model.to_number(),
-            simulation.dim as u8,
-            simulation.steps as u32,
-        )?;
+    let zeros = vec![0u8; slot_size as usize];
+    let mut removed = 0usize;
+    for &seed in seeds_to_remove {
+        if seed >= 1 && seed as u64 <= num_runs {
+            let offset = HEADER_SIZE + (seed as u64 - 1) * slot_size;
+            file.seek(SeekFrom::Start(offset))?;
+            file.write_all(&zeros)?;
+            removed += 1;
+        }
     }
 
-    Ok(removed_count)
+    // 狀態改回進行中；sidecar 與整檔雜湊已失效，一併移除
+    file.seek(SeekFrom::Start(STATUS_OFFSET))?;
+    file.write_all(&[STATUS_IN_PROGRESS])?;
+    file.sync_all()?;
+    let _ = std::fs::remove_file(crc_path(path));
+    let _ = std::fs::remove_file(hash_path(path));
+
+    Ok(removed)
 }

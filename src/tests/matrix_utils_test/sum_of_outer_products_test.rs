@@ -14,14 +14,13 @@ fn test_sum_of_outer_products_basic() {
     ]);
 
     // 手動計算 outer sum
-    let expected =
-        &a.column(0) * &b.column(0).transpose() + &a.column(1) * &b.column(1).transpose();
+    let expected = a.column(0) * &b.column(0).transpose() + a.column(1) * &b.column(1).transpose();
 
     let result = sum_of_outer_products(&a, &b);
     assert!(
         (&result - expected).abs().max() < 1e-10,
         "result = \n{}",
-        &result
+        result
     );
 }
 
@@ -44,14 +43,13 @@ fn test_sum_of_outer_products_different_dimensions() {
     assert_eq!(result.ncols(), 2);
 
     // 手動計算驗證
-    let expected =
-        &a.column(0) * &b.column(0).transpose() + &a.column(1) * &b.column(1).transpose();
+    let expected = a.column(0) * &b.column(0).transpose() + a.column(1) * &b.column(1).transpose();
 
     assert!(
         (&result - &expected).abs().max() < 1e-10,
         "Different dimensions test failed\nresult = \n{}\nexpected = \n{}",
-        &result,
-        &expected
+        result,
+        expected
     );
 }
 
@@ -62,7 +60,7 @@ fn test_sum_of_outer_products_single_column() {
     let b = DMatrix::<f64>::from_columns(&[nalgebra::DVector::from_vec(vec![4.0, 5.0])]);
 
     let result = sum_of_outer_products(&a, &b);
-    let expected = &a.column(0) * &b.column(0).transpose();
+    let expected = a.column(0) * &b.column(0).transpose();
 
     assert!(
         (&result - expected).abs().max() < 1e-10,
@@ -105,8 +103,8 @@ fn test_sum_of_outer_products_identity_like() {
     assert!(
         (&result - &expected).abs().max() < 1e-10,
         "Identity-like test failed\nresult = \n{}\nexpected = \n{}",
-        &result,
-        &expected
+        result,
+        expected
     );
 }
 
@@ -127,7 +125,7 @@ fn test_sum_of_outer_products_large_matrix() {
     assert_eq!(result.ncols(), size);
 
     // 手動計算第一個外積來部分驗證
-    let first_outer = &a.column(0) * &b.column(0).transpose();
+    let first_outer = a.column(0) * &b.column(0).transpose();
 
     // 驗證結果的第一個元素應該至少包含第一個外積的貢獻
     assert!(
@@ -149,8 +147,7 @@ fn test_sum_of_outer_products_numerical_precision() {
     ]);
 
     let result = sum_of_outer_products(&a, &b);
-    let expected =
-        &a.column(0) * &b.column(0).transpose() + &a.column(1) * &b.column(1).transpose();
+    let expected = a.column(0) * &b.column(0).transpose() + a.column(1) * &b.column(1).transpose();
 
     assert!(
         (&result - expected).abs().max() < 1e-25,

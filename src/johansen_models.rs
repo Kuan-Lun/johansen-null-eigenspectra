@@ -115,6 +115,18 @@ impl JohansenModel {
         }
     }
 
+    /// Number of eigenvalues produced per simulation run for a given dimension.
+    ///
+    /// Models 1 and 3 augment the system with an extra deterministic component,
+    /// yielding `dim + 1` eigenvalues; all other models yield `dim`.
+    pub fn eigenvalues_per_run(&self, dim: usize) -> usize {
+        match self {
+            JohansenModel::InterceptNoTrendWithInterceptInCoint
+            | JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => dim + 1,
+            _ => dim,
+        }
+    }
+
     /// 返回所有可用的模型
     pub fn all_models() -> [JohansenModel; 5] {
         [
