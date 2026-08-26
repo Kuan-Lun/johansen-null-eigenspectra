@@ -36,10 +36,17 @@ Start the Monte Carlo computation for the configured model. The *quiet* variant 
 ### Reading data
 
 ```rust
+pub fn read_data(&self) -> std::io::Result<Vec<Vec<f64>>>
 pub fn read_all_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>>
-pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>>
 ```
-`read_all_data` returns every record found in the data file, while `read_data` restricts the output to `num_runs` records and reports an error if fewer are available.
+`read_data` returns the records for seeds `1..=num_runs` in seed order — index `i` holds the record for seed `i + 1` — and reports an error if any record is missing. `read_all_data` returns every valid record currently stored with explicit seeds, which is useful for inspecting incomplete simulations.
+
+### Verifying data integrity
+
+```rust
+pub fn verify_file(&self) -> std::io::Result<()>
+```
+Recompute the SHA-256 hash of a completed data file and compare it against the accompanying `.sha256` file. The hash file uses the standard `sha256sum` format, so it can also be checked externally with `shasum -a 256 -c`.
 
 ### Calculating percentiles
 
