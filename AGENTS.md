@@ -24,6 +24,15 @@ Document AI agent interactions, configurations, and best practices for maintaini
 - **[文件編寫](./.agents/documentation.md)** - 用於文件更新、API 文件、註解規範
 - **[效能最佳化](./.agents/performance.md)** - 用於效能分析、最佳化建議、基準測試
 
+### Skills（跨工具通用的任務流程）
+
+以下流程以開放的 Agent Skills 標準（SKILL.md 格式）編寫，正本存放於
+`.agents/skills/`，任何 AI 開發工具皆可直接讀取執行；Claude Code 另透過
+`.claude/skills/` 的 symlink 自動發現。
+
+- **[release](./.agents/skills/release/SKILL.md)** - 發布新版本：分析變更、
+  更新版本號、產生 release notes、建立發布提交；push 後由 CI 自動打 tag 與建置
+
 ### 使用指南
 
 1. **識別任務類型** - 確定當前任務屬於哪個類別
