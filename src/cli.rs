@@ -57,65 +57,39 @@ impl CliArgs {
         while i < args.len() {
             match args[i].as_str() {
                 "--threads" => {
-                    if let Some(value) = Self::parse_next_arg(&args, i, "--threads")? {
-                        config.num_threads = Some(value);
-                    } else {
-                        return None;
-                    }
+                    config.num_threads = Some(Self::parse_next_arg(&args, i, "--threads")?);
                     i += 2;
                 }
                 "--steps" => {
-                    if let Some(value) = Self::parse_next_arg(&args, i, "--steps")? {
-                        config.steps = value;
-                    } else {
-                        return None;
-                    }
+                    config.steps = Self::parse_next_arg(&args, i, "--steps")?;
                     i += 2;
                 }
                 "--runs" => {
-                    if let Some(value) = Self::parse_next_arg(&args, i, "--runs")? {
-                        config.num_runs = value;
-                    } else {
-                        return None;
-                    }
+                    config.num_runs = Self::parse_next_arg(&args, i, "--runs")?;
                     i += 2;
                 }
                 "--dim-start" => {
-                    if let Some(value) = Self::parse_next_arg(&args, i, "--dim-start")? {
-                        config.dim_start = value;
-                    } else {
-                        return None;
-                    }
+                    config.dim_start = Self::parse_next_arg(&args, i, "--dim-start")?;
                     i += 2;
                 }
                 "--dim-end" => {
-                    if let Some(value) = Self::parse_next_arg(&args, i, "--dim-end")? {
-                        config.dim_end = value;
-                    } else {
-                        return None;
-                    }
+                    config.dim_end = Self::parse_next_arg(&args, i, "--dim-end")?;
                     i += 2;
                 }
                 "--dim" => {
-                    if let Some(value) = Self::parse_next_arg(&args, i, "--dim")? {
-                        config.dim_start = value;
-                        config.dim_end = value;
-                    } else {
-                        return None;
-                    }
+                    let value = Self::parse_next_arg(&args, i, "--dim")?;
+                    config.dim_start = value;
+                    config.dim_end = value;
                     i += 2;
                 }
                 "--model" => {
-                    if let Some(value) = Self::parse_next_string(&args, i, "--model")? {
-                        match Self::parse_models(&value) {
-                            Ok(models) => config.models = Some(models),
-                            Err(e) => {
-                                eprintln!("Error: {e}");
-                                return None;
-                            }
+                    let value = Self::parse_next_string(&args, i, "--model")?;
+                    match Self::parse_models(&value) {
+                        Ok(models) => config.models = Some(models),
+                        Err(e) => {
+                            eprintln!("Error: {e}");
+                            return None;
                         }
-                    } else {
-                        return None;
                     }
                     i += 2;
                 }
@@ -140,7 +114,7 @@ impl CliArgs {
     }
 
     /// 解析下一個參數值（支援逗號分隔的數字）
-    fn parse_next_arg(args: &[String], index: usize, param_name: &str) -> Option<Option<usize>> {
+    fn parse_next_arg(args: &[String], index: usize, param_name: &str) -> Option<usize> {
         if index + 1 >= args.len() {
             eprintln!("Error: {param_name} parameter requires a value");
             return None;
@@ -151,7 +125,7 @@ impl CliArgs {
         let cleaned_input = input.replace(',', "");
 
         match cleaned_input.parse::<usize>() {
-            Ok(value) => Some(Some(value)),
+            Ok(value) => Some(value),
             Err(_) => {
                 eprintln!(
                     "Error: {param_name} parameter must be a positive integer (commas allowed, e.g., 1,000,000)"
@@ -161,16 +135,12 @@ impl CliArgs {
         }
     }
     /// 解析下一個參數字串
-    fn parse_next_string(
-        args: &[String],
-        index: usize,
-        param_name: &str,
-    ) -> Option<Option<String>> {
+    fn parse_next_string(args: &[String], index: usize, param_name: &str) -> Option<String> {
         if index + 1 >= args.len() {
             eprintln!("Error: {param_name} parameter requires a value");
             return None;
         }
-        Some(Some(args[index + 1].clone()))
+        Some(args[index + 1].clone())
     }
 
     /// 從逗號分隔的字串解析模型列表
@@ -215,10 +185,10 @@ impl CliArgs {
         }
 
         // 檢查線程數量
-        if let Some(threads) = self.num_threads {
-            if !self.validate_thread_count(threads) {
-                return false;
-            }
+        if let Some(threads) = self.num_threads
+            && !self.validate_thread_count(threads)
+        {
+            return false;
         }
 
         true
