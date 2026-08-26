@@ -38,6 +38,15 @@ Document AI agent interactions, configurations, and best practices for maintaini
 - Johansen 協整檢驗的統計計算專案
 - 使用 Rust 程式語言，重視數值精度和計算效能
 
+### 建構環境
+
+- **一律從專案根目錄執行 cargo 指令**：LAPACK 透過 `.cargo/config.toml` 的
+  rustflags 連結（macOS 用 Accelerate framework、Linux 用系統 liblapack）。
+  從其他目錄執行（例如搭配 `--manifest-path`）會遺失這些設定，導致
+  `_dggev_` 等符號的連結錯誤。詳見 `LAPACK_SETUP.md`
+- nalgebra / nalgebra-lapack 使用 git 依賴而非 crates.io 發行版，
+  原因記錄在 `Cargo.toml` 的註解（crates.io 正式版強制依賴 lapack-src provider）
+
 ### 語言使用規範
 
 - **使用者介面和錯誤訊息**: 英文
