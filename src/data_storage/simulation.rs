@@ -1,9 +1,16 @@
-//! 特徵值模擬配置和主要 API
+//! Simulation configuration and the main public API.
 //!
 //! 提供 `EigenvalueSimulation` 結構體，這是整個模組的主要入口點。
+//! V7 格式下 seed 由槽位位置隱含：`read_data()` 回傳的第 i 筆
+//! 即為 seed = i+1 的結果。
 
+use std::path::Path;
+
+use super::error::StorageError;
+use super::file_format::{FileHeader, STATUS_COMPLETE, STATUS_IN_PROGRESS, crc_path, hash_path};
 use super::parallel_compute::run_model_simulation;
-use super::reader::read_append_file;
+use super::reader::{decode_payload, open_crc_file, open_data_file, read_slots, scan_slots};
+use super::writer::sha256_file;
 use crate::johansen_models::JohansenModel;
 
 /// 特徵值模擬配置結構體
@@ -21,13 +28,42 @@ pub struct EigenvalueSimulation {
 }
 
 impl EigenvalueSimulation {
-    /// 創建新的特徵值模擬配置
+    /// Create a new simulation configuration.
+    ///
+    /// # Panics
+    /// Panics when a parameter falls outside the storable range:
+    /// `dim` in `1..=254` (so `dim + 1` eigenvalues still fit in a byte),
+    /// `steps` in `1..=u32::MAX`, `num_runs` in `1..=u32::MAX`.
     pub fn new(model: JohansenModel, dim: usize, steps: usize, num_runs: usize) -> Self {
+        assert!(
+            (1..=254).contains(&dim),
+            "dim must be in 1..=254, got {dim}"
+        );
+        assert!(
+            steps >= 1 && steps <= u32::MAX as usize,
+            "steps must be in 1..=u32::MAX, got {steps}"
+        );
+        assert!(
+            num_runs >= 1 && num_runs <= u32::MAX as usize,
+            "num_runs must be in 1..=u32::MAX, got {num_runs}"
+        );
         Self {
             model,
             dim,
             steps,
             num_runs,
+        }
+    }
+
+    /// 構建此模擬配置對應的 V7 檔案標頭（進行中狀態）
+    pub(crate) fn file_header(&self) -> FileHeader {
+        FileHeader {
+            model: self.model.to_number(),
+            dim: self.dim as u8,
+            steps: self.steps as u32,
+            num_runs: self.num_runs as u64,
+            eigenvalues_per_run: self.model.eigenvalues_per_run(self.dim) as u8,
+            status: STATUS_IN_PROGRESS,
         }
     }
 
@@ -43,47 +79,135 @@ impl EigenvalueSimulation {
         run_model_simulation(self, true);
     }
 
-    /// 從追加格式讀取指定模型的所有特徵值數據（包含seed）
-    /// 注意：返回的數據可能無序，如需有序請自行排序
-    pub fn read_all_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
-        let filename = self.get_filename(self.model);
-        read_append_file(&filename).map(|(data, _model, _dim, _steps)| data)
+    /// Read the eigenvalue records for seeds `1..=num_runs`, in seed order.
+    ///
+    /// Seeds are implicit: index `i` holds the record for seed `i + 1`.
+    /// Returns an error when any requested record is missing or invalid;
+    /// use `read_all_data()` to read whatever is available instead.
+    pub fn read_data(&self) -> std::io::Result<Vec<Vec<f64>>> {
+        self.read_data_impl().map_err(Into::into)
     }
 
-    /// 從追加格式讀取指定模型的特徵值數據（包含seed）
-    /// 只返回 seed <= num_runs 的記錄，符合當前模擬配置的預期範圍
-    /// 注意：返回的數據可能無序，如需有序請自行排序
-    ///
-    /// # 錯誤處理
-    /// 當可用數據數量不等於 num_runs 時返回錯誤，建議：
-    /// - 使用 `read_all_data()` 讀取所有可用數據，或
-    /// - 運行 `run_simulation()` 生成完整數據
-    pub fn read_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
-        let all_data = self.read_all_data()?;
-        let filtered_data: Vec<_> = all_data
-            .into_iter()
-            .filter(|(seed, _)| *seed <= self.num_runs as u32)
-            .collect();
+    fn read_data_impl(&self) -> Result<Vec<Vec<f64>>, StorageError> {
+        let filename = self.get_filename(self.model);
+        let data = open_data_file(&filename)?;
+        data.header.check_compatible(&self.file_header())?;
 
-        if filtered_data.len() != self.num_runs {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "Data count mismatch: expected {} records, found {} records. \
-                     This indicates incomplete simulation data.\n\
-                     Solutions:\n\
-                     1. Use `read_all_data()` to read available data ({} records)\n\
-                     2. Run `run_simulation()` to complete the simulation\n\
-                     3. Create a new EigenvalueSimulation with num_runs={} to match existing data",
-                    self.num_runs,
-                    filtered_data.len(),
-                    filtered_data.len(),
-                    filtered_data.len()
-                ),
-            ));
+        let requested = self.num_runs as u64;
+        if data.header.status == STATUS_COMPLETE && data.header.num_runs >= requested {
+            // 完成協議保證所有槽位有效：直接快速讀取
+            return read_slots(&data.file, &data.header, requested);
         }
 
-        Ok(filtered_data)
+        // 進行中（或容量不足）的檔案：逐槽驗證
+        let limit = data.header.num_runs.min(requested);
+        let crc_file = open_crc_file(crc_path(Path::new(&filename)), &data.header)?;
+        let mut records: Vec<Vec<f64>> = Vec::new();
+        let mut found = 0usize;
+        scan_slots(
+            &data.file,
+            &data.header,
+            crc_file.as_ref(),
+            limit,
+            |_seed, payload, valid| {
+                if valid {
+                    found += 1;
+                    records.push(decode_payload(payload));
+                }
+            },
+        )?;
+
+        if found as u64 != requested {
+            return Err(StorageError::Incomplete {
+                found,
+                expected: self.num_runs,
+            });
+        }
+        Ok(records)
+    }
+
+    /// Read every valid record currently stored, with explicit seeds.
+    ///
+    /// Intended for inspecting incomplete files; records are returned in
+    /// seed order and gaps (unfinished seeds) are skipped.
+    #[allow(dead_code)] // library API：binary target 未使用
+    pub fn read_all_data(&self) -> std::io::Result<Vec<(u32, Vec<f64>)>> {
+        self.read_all_data_impl().map_err(Into::into)
+    }
+
+    #[allow(dead_code)]
+    fn read_all_data_impl(&self) -> Result<Vec<(u32, Vec<f64>)>, StorageError> {
+        let filename = self.get_filename(self.model);
+        let data = open_data_file(&filename)?;
+        data.header.check_compatible(&self.file_header())?;
+
+        if data.header.status == STATUS_COMPLETE {
+            let records = read_slots(&data.file, &data.header, data.header.num_runs)?;
+            return Ok(records
+                .into_iter()
+                .enumerate()
+                .map(|(i, eigenvalues)| (i as u32 + 1, eigenvalues))
+                .collect());
+        }
+
+        let crc_file = open_crc_file(crc_path(Path::new(&filename)), &data.header)?;
+        let mut records: Vec<(u32, Vec<f64>)> = Vec::new();
+        scan_slots(
+            &data.file,
+            &data.header,
+            crc_file.as_ref(),
+            data.header.num_runs,
+            |seed, payload, valid| {
+                if valid {
+                    records.push((seed, decode_payload(payload)));
+                }
+            },
+        )?;
+        Ok(records)
+    }
+
+    /// Verify the data file against its SHA-256 hash file.
+    ///
+    /// 供拿到別人的檔案、或長期存放後做完整性驗證用；
+    /// 一般讀取不會自動驗證（避免每次開檔都付出整檔雜湊的成本）。
+    #[allow(dead_code)] // library API：binary target 未使用
+    pub fn verify_file(&self) -> std::io::Result<()> {
+        self.verify_file_impl().map_err(Into::into)
+    }
+
+    #[allow(dead_code)]
+    fn verify_file_impl(&self) -> Result<(), StorageError> {
+        let filename = self.get_filename(self.model);
+        let data_path = Path::new(&filename);
+        let hash_file = hash_path(data_path);
+
+        let content = std::fs::read_to_string(&hash_file).map_err(|e| {
+            StorageError::HashMismatch(format!(
+                "cannot read hash file {}: {e}",
+                hash_file.display()
+            ))
+        })?;
+        let expected = content.split_whitespace().next().ok_or_else(|| {
+            StorageError::HashMismatch(format!("hash file {} is empty", hash_file.display()))
+        })?;
+
+        let actual = sha256_file(data_path)?;
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(StorageError::HashMismatch(format!(
+                "expected {expected}, computed {actual}"
+            )))
+        }
+    }
+
+    /// Remove the data file and its sidecar files (CRC and hash) for this model.
+    pub fn remove_data_files(&self) {
+        let filename = self.get_filename(self.model);
+        let data_path = Path::new(&filename);
+        let _ = std::fs::remove_file(data_path);
+        let _ = std::fs::remove_file(crc_path(data_path));
+        let _ = std::fs::remove_file(hash_path(data_path));
     }
 
     /// 獲取當前模型的檔案名稱
@@ -110,10 +234,10 @@ impl EigenvalueSimulation {
             );
         });
 
-        // 使用 PathBuf 構建跨平台的檔案路徑，使用新的檔案擴展名
+        // 使用 PathBuf 構建跨平台的檔案路徑
         let filename = format!(
             "eigenvalues_model{}_dim{}_steps{}.dat",
-            &model.to_number(),
+            model.to_number(),
             self.dim,
             self.steps
         );

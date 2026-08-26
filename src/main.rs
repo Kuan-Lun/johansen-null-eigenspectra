@@ -157,24 +157,20 @@ fn main() {
                 format_number_with_commas(data.len())
             );
 
-            // 顯示前5筆數據作為範例
+            // 顯示前5筆數據作為範例（seed 由記錄順序隱含：第 i 筆即 seed = i+1）
             conditional_println!(args.quiet, "First 5 data records as examples:");
 
             // 計算前5筆數據的最大寬度以對齊顯示
             let preview_data: Vec<_> = data.iter().take(5).collect();
-            let max_seed_width = preview_data
-                .iter()
-                .map(|(seed, _)| seed.to_string().len())
-                .max()
-                .unwrap_or(3);
+            let max_seed_width = preview_data.len().to_string().len();
             let max_sum_width = preview_data
                 .iter()
-                .map(|(_, eigenvalues)| format!("{:.6}", eigenvalues.iter().sum::<f64>()).len())
+                .map(|eigenvalues| format!("{:.6}", eigenvalues.iter().sum::<f64>()).len())
                 .max()
                 .unwrap_or(8);
             let max_eigenvalue_width = preview_data
                 .iter()
-                .flat_map(|(_, eigenvalues)| eigenvalues.iter())
+                .flat_map(|eigenvalues| eigenvalues.iter())
                 .map(|x| format!("{x:.6}").len())
                 .max()
                 .unwrap_or(8);
@@ -182,7 +178,7 @@ fn main() {
             // 預先計算所有 eigenvalue_str 以找出最大寬度
             let eigenvalue_strs: Vec<String> = preview_data
                 .iter()
-                .map(|(_, eigenvalues)| {
+                .map(|eigenvalues| {
                     eigenvalues
                         .iter()
                         .map(|x| format!("{x:max_eigenvalue_width$.6}"))
@@ -193,13 +189,13 @@ fn main() {
             let max_eigenvalue_str_width =
                 eigenvalue_strs.iter().map(|s| s.len()).max().unwrap_or(20);
 
-            for (i, (seed, eigenvalues)) in preview_data.iter().enumerate() {
+            for (i, eigenvalues) in preview_data.iter().enumerate() {
                 let eigenvalue_str = &eigenvalue_strs[i];
                 conditional_println!(
                     args.quiet,
                     "  Record {:2}: seed={:width1$}, eigenvalue sum={:width2$.6}, eigenvalues=[{:width3$}]",
                     i + 1,
-                    seed,
+                    i + 1,
                     eigenvalues.iter().sum::<f64>(),
                     eigenvalue_str,
                     width1 = max_seed_width,

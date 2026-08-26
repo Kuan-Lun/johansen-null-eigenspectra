@@ -1,5 +1,4 @@
 pub use crate::data_storage::EigenvalueSimulation;
-pub use crate::data_storage::writer::AppendOnlyWriter;
 pub use crate::johansen_models::JohansenModel;
 
 mod basic_api;

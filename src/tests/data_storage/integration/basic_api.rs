@@ -1,4 +1,5 @@
 use super::*;
+use crate::data_storage::file_format::{crc_path, hash_path};
 
 #[test]
 fn test_basic_simulation_api() {
@@ -8,7 +9,7 @@ fn test_basic_simulation_api() {
     let filename = simulation.get_filename(model);
 
     // 清理現有檔案
-    let _ = std::fs::remove_file(&filename);
+    simulation.remove_data_files();
 
     // 測試檔案名稱生成
     assert!(filename.contains("model0"));
@@ -23,26 +24,33 @@ fn test_basic_simulation_api() {
     }
 
     // 檢查檔案是否存在
-    assert!(std::path::Path::new(&filename).exists());
+    let data_path = std::path::Path::new(&filename);
+    assert!(data_path.exists());
 
-    // 讀取數據
+    // 完成後：CRC sidecar 應已刪除，SHA-256 雜湊檔應存在
+    assert!(!crc_path(data_path).exists());
+    assert!(hash_path(data_path).exists());
+
+    // 讀取數據（依 seed 順序，第 i 筆即 seed = i+1）
     let data = simulation.read_data().unwrap();
     assert_eq!(data.len(), 5);
-
-    // 檢查每筆數據格式
-    for (seed, eigenvalues) in &data {
-        assert!(*seed >= 1 && *seed <= 5);
+    for eigenvalues in &data {
         assert_eq!(eigenvalues.len(), 2); // 2x2 矩陣有 2 個特徵值
     }
 
-    // 測試排序功能
-    let mut sorted_data = simulation.read_data().unwrap();
-    sorted_data.sort_by_key(|(seed, _)| *seed);
-    assert_eq!(sorted_data.len(), 5);
-    for i in 1..sorted_data.len() {
-        assert!(sorted_data[i - 1].0 <= sorted_data[i].0);
+    // read_all_data 帶明確 seed 且與 read_data 一致
+    let all_data = simulation.read_all_data().unwrap();
+    assert_eq!(all_data.len(), 5);
+    for (i, (seed, eigenvalues)) in all_data.iter().enumerate() {
+        assert_eq!(*seed, i as u32 + 1);
+        assert_eq!(eigenvalues, &data[i]);
     }
 
+    // 完成的檔案應能通過 SHA-256 驗證
+    simulation.verify_file().unwrap();
+
     // 清理測試檔案
-    let _ = std::fs::remove_file(&filename);
+    for &model in &JohansenModel::all_models() {
+        EigenvalueSimulation::new(model, 2, 101, 5).remove_data_files();
+    }
 }

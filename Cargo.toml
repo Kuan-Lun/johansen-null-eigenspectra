@@ -11,6 +11,7 @@ nalgebra-lapack = { git = "https://github.com/dimforge/nalgebra", package = "nal
 rand_xoshiro = "0.7.0"
 rayon = "1.10.0"
 num_cpus = "1.17.0"
+sha2 = "0.10"
 
 [profile.release]
 # 啟用鏈接時優化 (LTO) - 會增加編譯時間但提高運行性能

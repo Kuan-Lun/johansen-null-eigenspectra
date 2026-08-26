@@ -51,7 +51,7 @@ pub fn calculate_percentiles<A: Aggregator>(
 
     let values: Vec<f64> = data
         .iter()
-        .map(|(_, eigenvalues)| aggregator.aggregate(eigenvalues))
+        .map(|eigenvalues| aggregator.aggregate(eigenvalues))
         .collect();
     let mut sorted_values = values;
     sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());

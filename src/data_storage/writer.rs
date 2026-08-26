@@ -1,303 +1,439 @@
-//! 追加寫入器 - 高性能的數據寫入
+//! Slot writer for the V7 fixed-slot format.
 //!
-//! 實現真正的追加寫入，避免每次都重寫整個檔案
+//! 每個 seed 對應主檔中固定位置的槽位，worker 執行緒以定位寫入
+//! （pwrite）並行寫入互不重疊的槽位，無需鎖或寫入執行緒。
+//! 寫入期間同步維護 CRC sidecar；完成時執行完成協議：
+//! fsync → status=1 → fsync → 計算整檔 SHA-256 → 寫入雜湊檔 → 刪除 sidecar。
 
-use crate::display_utils::format_number_with_commas;
 use std::fs::{File, OpenOptions};
-use std::io::{BufWriter, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
-use super::config::{FLUSH_INTERVAL, WRITE_BUFFER_CAPACITY};
-use super::file_format::{EOF_MARKER, MAGIC_HEADER};
-use super::reader::read_append_file;
-use super::uleb128;
+use sha2::{Digest, Sha256};
 
-/// 追加寫入器 - 支援高效的數據追加和斷點續傳
-pub struct AppendOnlyWriter {
-    writer: BufWriter<File>,
-    written_count: usize,
-    eigenvalues_per_run: Option<usize>,
-    model: u8,
-    dim: u8,
-    steps: u32,
+use super::error::StorageError;
+use super::file_format::{
+    CRC_HEADER_SIZE, FileHeader, HEADER_SIZE, STATUS_COMPLETE, STATUS_IN_PROGRESS, STATUS_OFFSET,
+    calculate_read_buffer_size, crc_path, hash_path, record_crc,
+};
+use super::reader::{open_data_file, scan_slots};
+use crate::display_utils::format_number_with_commas;
+
+/// 跨平台的定位寫入（不移動檔案游標，可多執行緒併行使用）
+#[cfg(unix)]
+fn write_all_at(file: &File, buf: &[u8], offset: u64) -> std::io::Result<()> {
+    use std::os::unix::fs::FileExt;
+    file.write_all_at(buf, offset)
+}
+
+#[cfg(windows)]
+fn write_all_at(file: &File, mut buf: &[u8], mut offset: u64) -> std::io::Result<()> {
+    use std::os::windows::fs::FileExt;
+    while !buf.is_empty() {
+        let written = file.seek_write(buf, offset)?;
+        if written == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "failed to write whole buffer",
+            ));
+        }
+        buf = &buf[written..];
+        offset += written as u64;
+    }
+    Ok(())
+}
+
+/// Result of opening a data file for writing.
+pub enum OpenResult {
+    /// Every requested slot already holds a valid record.
+    AlreadyComplete,
+    /// The file accepts writes for the listed remaining seeds.
+    InProgress {
+        writer: SlotWriter,
+        remaining_seeds: Vec<u32>,
+        completed_runs: usize,
+    },
+}
+
+/// Positioned writer over a data file and its CRC sidecar.
+pub struct SlotWriter {
+    data_file: File,
+    crc_file: File,
+    header: FileHeader,
+    data_path: PathBuf,
+    /// 檔案容量內、但在本次請求範圍之外的未完成槽位數。
+    /// 大於零時 finish() 不得標記完成。
+    pending_outside_run: usize,
     quiet: bool,
 }
 
-impl AppendOnlyWriter {
-    /// 創建新的追加寫入器，並可選擇預先配置檔案大小
-    pub fn with_expected_size<P: AsRef<Path>>(
-        path: P,
-        expected_size: Option<u64>,
-        model: u8,
-        dim: u8,
-        steps: u32,
-        quiet: bool,
-    ) -> std::io::Result<Self> {
-        let path_ref = path.as_ref();
-        let is_new_file = !path_ref.exists();
+impl SlotWriter {
+    /// Open (or create) the data file for `expected` and determine which
+    /// seeds within `1..=expected.num_runs` still need to be computed.
+    ///
+    /// 既有檔案會經過參數驗證、必要時擴容，並掃描全部槽位的有效性。
+    pub fn open(path: &str, expected: FileHeader, quiet: bool) -> Result<OpenResult, StorageError> {
+        let data_path = PathBuf::from(path);
+        if !data_path.exists() {
+            return Self::create_new(data_path, expected, quiet);
+        }
 
-        let mut written_count = 0;
-        let mut eigenvalues_per_run = None;
+        let existing = open_data_file(&data_path)?;
+        let mut header = existing.header;
+        drop(existing);
+        header.check_compatible(&expected)?;
 
-        if is_new_file {
-            // 新檔案：直接創建並寫入魔術標頭和元數據
-            let file = OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .read(true)
-                .write(true)
-                .open(path_ref)?;
+        // 已完成且容量足夠：無事可做
+        if header.status == STATUS_COMPLETE && header.num_runs >= expected.num_runs {
+            return Ok(OpenResult::AlreadyComplete);
+        }
 
-            // 如果指定了預期大小，預先分配檔案空間（暫時禁用以避免影響斷點續傳）
-            if let Some(_size) = expected_size {
-                if !quiet {
-                    println!(
-                        "File pre-allocation disabled to ensure resume functionality works correctly"
-                    );
-                }
-            }
+        let data_file = OpenOptions::new().read(true).write(true).open(&data_path)?;
 
-            let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
-            writer.write_all(MAGIC_HEADER)?;
-            writer.write_all(&model.to_le_bytes())?;
-            writer.write_all(&dim.to_le_bytes())?;
-            writer.write_all(&steps.to_le_bytes())?;
-            writer.flush()?;
-
-            Ok(Self {
-                writer,
-                written_count: 0,
-                eigenvalues_per_run: None,
-                model,
-                dim,
-                steps,
+        let crc_file = if header.num_runs < expected.num_runs {
+            // 容量不足：擴容（會將 status 歸零並使舊雜湊檔失效）
+            expand_file(
+                &data_file,
+                &mut header,
+                expected.num_runs,
+                &data_path,
                 quiet,
-            })
+            )?
         } else {
-            // 既有檔案：檢查數據並移除 EOF 標記
-            // 先讀取檔案內容來獲取計數 (保持原始容錯邏輯)
-            match read_append_file(&path) {
-                Ok((existing_data, file_model, file_dim, file_steps)) => {
-                    // 驗證參數是否匹配
-                    if file_model != model {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!(
-                                "Model mismatch: file has model {file_model}, expected {model}"
-                            ),
-                        ));
-                    }
-                    if file_dim != dim {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!("Dimension mismatch: file has dim {file_dim}, expected {dim}"),
-                        ));
-                    }
-                    if file_steps != steps {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!(
-                                "Steps mismatch: file has steps {file_steps}, expected {steps}"
-                            ),
-                        ));
-                    }
-
-                    written_count = existing_data.len();
-                    if let Some((_, eigenvalues)) = existing_data.first() {
-                        eigenvalues_per_run = Some(eigenvalues.len());
-                    }
-                    if !quiet {
-                        println!(
-                            "Detected existing file with {} data records",
-                            format_number_with_commas(written_count)
-                        );
-                    }
-                }
-                Err(e)
-                    if e.to_string()
-                        .contains("File format error: magic header mismatch") =>
-                {
-                    // 文件格式不兼容，刪除舊文件並重新創建
-                    if !quiet {
-                        println!("WARNING: Incompatible file format detected, recreating file...");
-                    }
-                    std::fs::remove_file(&path)?;
-
-                    // 重新創建新文件
-                    let file = OpenOptions::new()
-                        .create(true)
-                        .truncate(true)
-                        .read(true)
-                        .write(true)
-                        .open(path_ref)?;
-
-                    let mut writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
-                    writer.write_all(MAGIC_HEADER)?;
-                    writer.write_all(&model.to_le_bytes())?;
-                    writer.write_all(&dim.to_le_bytes())?;
-                    writer.write_all(&steps.to_le_bytes())?;
-                    writer.flush()?;
-
-                    return Ok(Self {
-                        writer,
-                        written_count: 0,
-                        eigenvalues_per_run: None,
-                        model,
-                        dim,
-                        steps,
-                        quiet,
-                    });
-                }
-                Err(_) => {
-                    // 其他讀取錯誤，採用容錯策略
-                    if !quiet {
-                        println!(
-                            "WARNING: Could not read existing file, will attempt to append..."
-                        );
-                    }
-                }
+            // 修剪擴容中斷可能殘留的多餘尾端，恢復大小不變式
+            if data_file.metadata()?.len() > header.data_file_size() {
+                data_file.set_len(header.data_file_size())?;
             }
+            ensure_crc_file(&data_file, &header, &data_path, quiet)?
+        };
 
-            // 然後移除 EOF 標記：打開檔案並截斷到數據結束位置
-            Self::remove_eof_marker(path_ref, quiet)?;
-
-            // 設置為追加模式
-            let file = OpenOptions::new().append(true).open(path_ref)?;
-            let writer = BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file);
-
-            Ok(Self {
-                writer,
-                written_count,
-                eigenvalues_per_run,
-                model,
-                dim,
-                steps,
-                quiet,
-            })
-        }
-    }
-
-    /// 移除 EOF 標記以啟用追加模式
-    fn remove_eof_marker<P: AsRef<Path>>(path: P, quiet: bool) -> std::io::Result<()> {
-        use std::io::Read;
-
-        let mut file = OpenOptions::new().read(true).write(true).open(path)?;
-        let file_len = file.metadata()?.len();
-
-        // 檢查檔案結尾是否真的包含 EOF 標記
-        if file_len >= 18 + 17 {
-            // magic(12) + model(1) + dim(1) + steps(4) + eof_marker(8) + count(8) + eigenvalues_per_run(1) = 35
-            file.seek(SeekFrom::End(-17))?; // eof_marker(8) + count(8) + eigenvalues_per_run(1) = 17
-            let mut eof_buf = [0u8; 8];
-            if let Ok(()) = file.read_exact(&mut eof_buf) {
-                if eof_buf == EOF_MARKER {
-                    let new_len = file_len - 17;
-                    file.set_len(new_len)?;
-                    if !quiet {
-                        println!("Removed EOF marker to enable append mode");
-                    }
+        // 掃描整個檔案容量的槽位有效性（涵蓋請求範圍之外的槽位，
+        // 供 finish() 判斷能否將整個檔案標記為完成）
+        let mut remaining_all: Vec<u32> = Vec::new();
+        scan_slots(
+            &data_file,
+            &header,
+            Some(&crc_file),
+            header.num_runs,
+            |seed, _payload, valid| {
+                if !valid {
+                    remaining_all.push(seed);
                 }
+            },
+        )?;
+
+        let requested = expected.num_runs;
+        let mut remaining_seeds: Vec<u32> = Vec::new();
+        let mut pending_outside_run = 0usize;
+        for &seed in &remaining_all {
+            if seed as u64 <= requested {
+                remaining_seeds.push(seed);
+            } else {
+                pending_outside_run += 1;
             }
         }
-        Ok(())
-    }
+        let completed_runs = requested as usize - remaining_seeds.len();
 
-    /// 追加特徵值數據
-    pub fn append_eigenvalues(&mut self, seed: u32, eigenvalues: &[f64]) -> std::io::Result<()> {
-        // 檢查特徵值數量是否在 u8 範圍內
-        if eigenvalues.len() > u8::MAX as usize {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "Too many eigenvalues: {} exceeds maximum of {}",
-                    format_number_with_commas(eigenvalues.len()),
-                    u8::MAX
-                ),
-            ));
-        }
-
-        // 如果是第一次寫入，記錄特徵值的數量
-        if self.eigenvalues_per_run.is_none() {
-            self.eigenvalues_per_run = Some(eigenvalues.len());
-        }
-
-        // 檢查特徵值數量是否一致
-        if let Some(expected_len) = self.eigenvalues_per_run {
-            if eigenvalues.len() != expected_len {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!(
-                        "Eigenvalue count mismatch: expected {}, actual {} (model {}, dim {}, steps {})",
-                        format_number_with_commas(expected_len),
-                        format_number_with_commas(eigenvalues.len()),
-                        self.model,
-                        self.dim,
-                        self.steps
-                    ),
-                ));
-            }
-        }
-
-        // 寫入數據塊：[seed: ULEB128] [eigenvalue_count: 1 byte] [eigenvalues: count * 8 bytes]
-        let seed_bytes = uleb128::encode(seed);
-        self.writer.write_all(&seed_bytes)?;
-        self.writer
-            .write_all(&(eigenvalues.len() as u8).to_le_bytes())?;
-
-        for &val in eigenvalues {
-            self.writer.write_all(&val.to_le_bytes())?;
-        }
-
-        self.written_count += 1;
-
-        // 定期刷新緩衝區
-        if self.written_count % FLUSH_INTERVAL == 0 {
-            self.writer.flush()?;
-        }
-
-        Ok(())
-    }
-
-    /// 完成寫入，添加結束標記
-    pub fn finish(mut self) -> std::io::Result<()> {
-        // 刷新所有緩衝的數據
-        self.writer.flush()?;
-
-        // 寫入結束標記和總數
-        self.writer.write_all(EOF_MARKER)?;
-        self.writer
-            .write_all(&(self.written_count as u64).to_le_bytes())?;
-
-        if let Some(eigenvalues_per_run) = self.eigenvalues_per_run {
-            // 檢查 eigenvalues_per_run 是否在 u8 範圍內
-            if eigenvalues_per_run > u8::MAX as usize {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!(
-                        "Too many eigenvalues per run: {} exceeds maximum of {}",
-                        format_number_with_commas(eigenvalues_per_run),
-                        u8::MAX
-                    ),
-                ));
-            }
-            self.writer
-                .write_all(&(eigenvalues_per_run as u8).to_le_bytes())?;
-        } else {
-            self.writer.write_all(&0u8.to_le_bytes())?;
-        }
-
-        self.writer.flush()?;
-
-        if !self.quiet {
+        if !quiet && completed_runs > 0 {
             println!(
-                "SUCCESS: append write completed, wrote {} data records for model {}, dim {}, steps {}",
-                format_number_with_commas(self.written_count),
-                self.model,
-                self.dim,
-                self.steps
+                "Detected existing file with {} completed records",
+                format_number_with_commas(completed_runs)
             );
         }
 
+        let writer = SlotWriter {
+            data_file,
+            crc_file,
+            header,
+            data_path,
+            pending_outside_run,
+            quiet,
+        };
+
+        if remaining_seeds.is_empty() {
+            // 請求範圍已全部完成（例如前次執行在收尾前中斷）：直接收尾
+            writer.finish()?;
+            return Ok(OpenResult::AlreadyComplete);
+        }
+
+        Ok(OpenResult::InProgress {
+            writer,
+            remaining_seeds,
+            completed_runs,
+        })
+    }
+
+    /// 建立全新的主檔與 CRC sidecar，並以 `set_len` 預配置空間
+    fn create_new(
+        data_path: PathBuf,
+        expected: FileHeader,
+        quiet: bool,
+    ) -> Result<OpenResult, StorageError> {
+        let mut header = expected;
+        header.status = STATUS_IN_PROGRESS;
+
+        let data_file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&data_path)?;
+        write_all_at(&data_file, &header.encode(), 0)?;
+        data_file.set_len(header.data_file_size())?;
+        data_file.sync_all()?;
+
+        let crc_file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(crc_path(&data_path))?;
+        write_all_at(&crc_file, &header.encode_crc_header(), 0)?;
+        crc_file.set_len(header.crc_file_size())?;
+        crc_file.sync_all()?;
+
+        let remaining_seeds: Vec<u32> = (1..=header.num_runs as u32).collect();
+        Ok(OpenResult::InProgress {
+            writer: SlotWriter {
+                data_file,
+                crc_file,
+                header,
+                data_path,
+                pending_outside_run: 0,
+                quiet,
+            },
+            remaining_seeds,
+            completed_runs: 0,
+        })
+    }
+
+    /// Write the eigenvalues for `seed` into its slot.
+    ///
+    /// Slots do not overlap, so this is safe to call concurrently from
+    /// multiple threads for distinct seeds.
+    pub fn write_slot(&self, seed: u32, eigenvalues: &[f64]) -> Result<(), StorageError> {
+        let expected_len = self.header.eigenvalues_per_run as usize;
+        if eigenvalues.len() != expected_len {
+            return Err(StorageError::InvalidInput(format!(
+                "eigenvalue count mismatch: expected {expected_len}, actual {} (model {}, dim {}, steps {})",
+                eigenvalues.len(),
+                self.header.model,
+                self.header.dim,
+                self.header.steps
+            )));
+        }
+        if seed == 0 || seed as u64 > self.header.num_runs {
+            return Err(StorageError::InvalidInput(format!(
+                "seed {seed} is outside the file capacity 1..={}",
+                self.header.num_runs
+            )));
+        }
+
+        let payload: Vec<u8> = eigenvalues
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        write_all_at(&self.data_file, &payload, self.header.slot_offset(seed))?;
+
+        let crc = record_crc(seed, &payload);
+        write_all_at(
+            &self.crc_file,
+            &crc.to_le_bytes(),
+            FileHeader::crc_offset(seed),
+        )?;
         Ok(())
     }
+
+    /// Flush both files' data to disk.
+    pub fn sync(&self) -> Result<(), StorageError> {
+        self.data_file.sync_data()?;
+        self.crc_file.sync_data()?;
+        Ok(())
+    }
+
+    /// Finalize the file.
+    ///
+    /// When every slot in the file is valid, this marks the file complete,
+    /// writes the SHA-256 hash file, and removes the CRC sidecar. Otherwise
+    /// the file stays in progress and keeps its sidecar for future resumes.
+    pub fn finish(mut self) -> Result<(), StorageError> {
+        self.data_file.sync_data()?;
+        self.crc_file.sync_data()?;
+
+        if self.pending_outside_run > 0 {
+            // 檔案容量大於本次請求範圍，仍有槽位未完成：維持進行中狀態
+            if !self.quiet {
+                println!(
+                    "Note: {} slots beyond the requested range remain incomplete; file stays resumable",
+                    format_number_with_commas(self.pending_outside_run)
+                );
+            }
+            return Ok(());
+        }
+
+        // 完成協議：資料已落盤 → 標記完成 → 落盤 → 整檔雜湊 → 刪除 sidecar
+        self.header.status = STATUS_COMPLETE;
+        write_all_at(&self.data_file, &[STATUS_COMPLETE], STATUS_OFFSET)?;
+        self.data_file.sync_all()?;
+
+        let hash_hex = sha256_file(&self.data_path)?;
+        let basename = self
+            .data_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        std::fs::write(
+            hash_path(&self.data_path),
+            format!("{hash_hex}  {basename}\n"),
+        )?;
+
+        let _ = std::fs::remove_file(crc_path(&self.data_path));
+
+        if !self.quiet {
+            println!(
+                "SUCCESS: simulation data complete, {} records for model {}, dim {}, steps {}",
+                format_number_with_commas(self.header.num_runs as usize),
+                self.header.model,
+                self.header.dim,
+                self.header.steps
+            );
+        }
+        Ok(())
+    }
+}
+
+/// 嘗試以讀寫模式打開結構有效的 CRC sidecar；遺失或無效時回傳 `None`
+fn try_open_valid_crc(header: &FileHeader, crc_path: &Path) -> Result<Option<File>, StorageError> {
+    let mut file = match OpenOptions::new().read(true).write(true).open(crc_path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(StorageError::Io(e)),
+    };
+    let mut buf = [0u8; CRC_HEADER_SIZE as usize];
+    if file.read_exact(&mut buf).is_err() {
+        return Ok(None);
+    }
+    if !header.crc_header_matches(&buf) {
+        return Ok(None);
+    }
+    if file.metadata()?.len() < header.crc_file_size() {
+        return Ok(None);
+    }
+    Ok(Some(file))
+}
+
+/// 確保 CRC sidecar 存在且結構有效；遺失時以降級模式重建
+fn ensure_crc_file(
+    data_file: &File,
+    header: &FileHeader,
+    data_path: &Path,
+    quiet: bool,
+) -> Result<File, StorageError> {
+    let path = crc_path(data_path);
+    if let Some(file) = try_open_valid_crc(header, &path)? {
+        return Ok(file);
+    }
+    if !quiet {
+        println!(
+            "WARNING: CRC sidecar missing or invalid; rebuilding from existing data (torn-write detection unavailable for existing records)"
+        );
+    }
+    rebuild_crc_file(data_file, header, &path)
+}
+
+/// 重建 CRC sidecar：非零槽位以現存內容計算 CRC（視為有效），零槽位保持 0
+fn rebuild_crc_file(
+    data_file: &File,
+    header: &FileHeader,
+    crc_path: &Path,
+) -> Result<File, StorageError> {
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .read(true)
+        .write(true)
+        .open(crc_path)?;
+    {
+        let mut writer = BufWriter::new(&file);
+        writer.write_all(&header.encode_crc_header())?;
+
+        let buffer_size = calculate_read_buffer_size(header.data_file_size());
+        let mut reader = BufReader::with_capacity(buffer_size, data_file);
+        reader.seek(SeekFrom::Start(HEADER_SIZE))?;
+
+        let mut payload = vec![0u8; header.slot_size() as usize];
+        for seed in 1..=header.num_runs {
+            reader.read_exact(&mut payload)?;
+            let crc = if payload.iter().any(|&b| b != 0) {
+                record_crc(seed as u32, &payload)
+            } else {
+                0
+            };
+            writer.write_all(&crc.to_le_bytes())?;
+        }
+        writer.flush()?;
+    }
+    file.sync_all()?;
+    Ok(file)
+}
+
+/// 擴容：延長主檔與 sidecar 至新容量並更新 header。
+/// 舊資料原封保留；舊 sidecar 有效時延用其 CRC，否則重建
+/// （包含「已完成檔案再擴容」的情境：sidecar 已刪除，據現存資料重建）。
+fn expand_file(
+    data_file: &File,
+    header: &mut FileHeader,
+    new_num_runs: u64,
+    data_path: &Path,
+    quiet: bool,
+) -> Result<File, StorageError> {
+    if !quiet {
+        println!(
+            "Expanding data file capacity from {} to {} runs",
+            format_number_with_commas(header.num_runs as usize),
+            format_number_with_commas(new_num_runs as usize)
+        );
+    }
+    let old_header = *header;
+    header.num_runs = new_num_runs;
+    header.status = STATUS_IN_PROGRESS;
+
+    // 先延長主檔（新區域為零 → 未完成槽位），再處理 sidecar，最後才改寫
+    // header：中途斷電時 header 仍描述舊的一致狀態
+    data_file.set_len(header.data_file_size())?;
+
+    let path = crc_path(data_path);
+    let crc_file = match try_open_valid_crc(&old_header, &path)? {
+        Some(file) => {
+            // 延長既有 sidecar，保留舊 CRC（維持 torn-write 偵測能力）
+            file.set_len(header.crc_file_size())?;
+            write_all_at(&file, &header.encode_crc_header(), 0)?;
+            file.sync_all()?;
+            file
+        }
+        None => rebuild_crc_file(data_file, header, &path)?,
+    };
+
+    write_all_at(data_file, &header.encode(), 0)?;
+    data_file.sync_all()?;
+
+    // 舊的整檔雜湊已失效
+    let _ = std::fs::remove_file(hash_path(data_path));
+    Ok(crc_file)
+}
+
+/// Stream a file through SHA-256 and return the lowercase hex digest.
+pub fn sha256_file(path: &Path) -> Result<String, StorageError> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1024 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    let digest = hasher.finalize();
+    Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
 }

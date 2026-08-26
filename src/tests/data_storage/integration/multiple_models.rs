@@ -3,14 +3,9 @@ use super::*;
 #[test]
 fn test_multiple_models() {
     // 使用唯一的參數組合避免與其他測試檔案衝突
-    let model = JohansenModel::NoInterceptNoTrend;
-    let simulation = EigenvalueSimulation::new(model, 2, 54, 3);
-
     // 清理所有現有檔案
     for test_model in JohansenModel::all_models() {
-        let test_simulation = EigenvalueSimulation::new(test_model, 2, 54, 3);
-        let filename = test_simulation.get_filename(test_model);
-        let _ = std::fs::remove_file(&filename);
+        EigenvalueSimulation::new(test_model, 2, 54, 3).remove_data_files();
     }
 
     // 運行所有模型的計算
@@ -28,18 +23,16 @@ fn test_multiple_models() {
         let data = test_simulation.read_data().unwrap();
         assert_eq!(data.len(), 3);
 
-        // 檢查數據格式
-        for (seed, eigenvalues) in &data {
-            assert!(*seed >= 1 && *seed <= 3);
-            // 不固定特徵值數量，因為不同模型可能返回不同數量
-            assert!(eigenvalues.len() >= 1, "至少應該有1個特徵值");
+        // 檢查數據格式：特徵值數量由模型決定（dim 或 dim+1）
+        let expected_count = test_model.eigenvalues_per_run(2);
+        for eigenvalues in &data {
+            assert_eq!(eigenvalues.len(), expected_count);
             assert!(eigenvalues.iter().all(|&x| x.is_finite()));
         }
     }
 
     // 清理測試檔案
-    for model in JohansenModel::all_models() {
-        let filename = simulation.get_filename(model);
-        let _ = std::fs::remove_file(&filename);
+    for test_model in JohansenModel::all_models() {
+        EigenvalueSimulation::new(test_model, 2, 54, 3).remove_data_files();
     }
 }

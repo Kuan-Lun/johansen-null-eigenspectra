@@ -11,10 +11,11 @@ fn test_edge_cases() {
         test_simulation.run_simulation_quiet();
     }
     let data = tiny_simulation.read_data().unwrap();
-    assert_eq!(data.len(), 1);
-    assert_eq!(data[0].0, 1); // seed 應該是 1
+    assert_eq!(data.len(), 1); // 只有 seed=1 的一筆記錄
+    assert_eq!(data[0].len(), 2); // 2x2 矩陣有 2 個特徵值
 
     // 清理測試檔案
-    let filename = tiny_simulation.get_filename(model);
-    let _ = std::fs::remove_file(&filename);
+    for &test_model in &JohansenModel::all_models() {
+        EigenvalueSimulation::new(test_model, 2, 11, 1).remove_data_files();
+    }
 }
