@@ -43,12 +43,9 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y liblapack-dev libopenblas-dev gfortran
-    
-    - name: Install LAPACK (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install openblas lapack
-    
+
+    # macOS 不需安裝 LAPACK：.cargo/config.toml 連結內建的 Accelerate framework
+
     - name: Build
       run: cargo build --release --target ${{ matrix.target }}
     
@@ -69,34 +66,18 @@ jobs:
     
     - name: Download all artifacts
       uses: actions/download-artifact@v4
-    
-    - name: Debug artifact structure
-      run: |
-        echo "Current directory contents:"
-        ls -la
-        echo "Looking for binary files:"
-        find . -name "johansen-null-eigenspectra" -type f
-        echo "All files in current directory:"
-        find . -type f
-    
+
     - name: Prepare release files
       run: |
-        # Create a flat structure for easier file handling
+        # 逐一以平台後綴命名；任一 artifact 缺失時直接失敗，
+        # 避免發布缺少平台的 release
         mkdir -p release-files
-        find . -name "johansen-null-eigenspectra" -type f -exec cp {} release-files/ \;
-        
-        # Rename files to include platform info
-        if [ -f "johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra" ]; then
-          cp "johansen-null-eigenspectra-linux-x86_64/johansen-null-eigenspectra" "release-files/johansen-null-eigenspectra-linux-x86_64"
-        fi
-        if [ -f "johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra" ]; then
-          cp "johansen-null-eigenspectra-macos-x86_64/johansen-null-eigenspectra" "release-files/johansen-null-eigenspectra-macos-x86_64"
-        fi
-        if [ -f "johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra" ]; then
-          cp "johansen-null-eigenspectra-macos-arm64/johansen-null-eigenspectra" "release-files/johansen-null-eigenspectra-macos-arm64"
-        fi
-        
-        echo "Release files prepared:"
+        for asset in \
+          johansen-null-eigenspectra-linux-x86_64 \
+          johansen-null-eigenspectra-macos-x86_64 \
+          johansen-null-eigenspectra-macos-arm64; do
+          cp "${asset}/johansen-null-eigenspectra" "release-files/${asset}"
+        done
         ls -la release-files/
     
     - name: Read release notes
@@ -136,7 +117,7 @@ jobs:
         fi
     
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: release-files/*
         draft: true
