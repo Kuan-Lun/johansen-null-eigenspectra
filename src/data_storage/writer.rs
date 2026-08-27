@@ -11,13 +11,12 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use super::error::StorageError;
 use super::file_format::{
     CRC_HEADER_SIZE, FileHeader, HEADER_SIZE, STATUS_COMPLETE, STATUS_IN_PROGRESS, STATUS_OFFSET,
     calculate_read_buffer_size, crc_path, hash_path, record_crc,
 };
 use super::reader::{open_data_file, scan_slots};
-use crate::display_utils::format_number_with_commas;
+use crate::error::Error;
 
 /// 跨平台的定位寫入（不移動檔案游標，可多執行緒併行使用）
 #[cfg(unix)]
@@ -64,7 +63,6 @@ pub struct SlotWriter {
     /// 檔案容量內、但在本次請求範圍之外的未完成槽位數。
     /// 大於零時 finish() 不得標記完成。
     pending_outside_run: usize,
-    quiet: bool,
 }
 
 impl SlotWriter {
@@ -72,14 +70,10 @@ impl SlotWriter {
     /// seeds within `1..=expected.num_runs` still need to be computed.
     ///
     /// 既有檔案會經過參數驗證、必要時擴容，並掃描全部槽位的有效性。
-    pub fn open<P: AsRef<Path>>(
-        path: P,
-        expected: FileHeader,
-        quiet: bool,
-    ) -> Result<OpenResult, StorageError> {
+    pub fn open<P: AsRef<Path>>(path: P, expected: FileHeader) -> Result<OpenResult, Error> {
         let data_path = path.as_ref().to_path_buf();
         if !data_path.exists() {
-            return Self::create_new(data_path, expected, quiet);
+            return Self::create_new(data_path, expected);
         }
 
         let existing = open_data_file(&data_path)?;
@@ -96,19 +90,13 @@ impl SlotWriter {
 
         let crc_file = if header.num_runs < expected.num_runs {
             // 容量不足：擴容（會將 status 歸零並使舊雜湊檔失效）
-            expand_file(
-                &data_file,
-                &mut header,
-                expected.num_runs,
-                &data_path,
-                quiet,
-            )?
+            expand_file(&data_file, &mut header, expected.num_runs, &data_path)?
         } else {
             // 修剪擴容中斷可能殘留的多餘尾端，恢復大小不變式
             if data_file.metadata()?.len() > header.data_file_size() {
                 data_file.set_len(header.data_file_size())?;
             }
-            ensure_crc_file(&data_file, &header, &data_path, quiet)?
+            ensure_crc_file(&data_file, &header, &data_path)?
         };
 
         // 掃描整個檔案容量的槽位有效性（涵蓋請求範圍之外的槽位，
@@ -138,20 +126,12 @@ impl SlotWriter {
         }
         let completed_runs = requested as usize - remaining_seeds.len();
 
-        if !quiet && completed_runs > 0 {
-            println!(
-                "Detected existing file with {} completed records",
-                format_number_with_commas(completed_runs)
-            );
-        }
-
         let writer = SlotWriter {
             data_file,
             crc_file,
             header,
             data_path,
             pending_outside_run,
-            quiet,
         };
 
         if remaining_seeds.is_empty() {
@@ -168,11 +148,7 @@ impl SlotWriter {
     }
 
     /// 建立全新的主檔與 CRC sidecar，並以 `set_len` 預配置空間
-    fn create_new(
-        data_path: PathBuf,
-        expected: FileHeader,
-        quiet: bool,
-    ) -> Result<OpenResult, StorageError> {
+    fn create_new(data_path: PathBuf, expected: FileHeader) -> Result<OpenResult, Error> {
         let mut header = expected;
         header.status = STATUS_IN_PROGRESS;
 
@@ -212,7 +188,6 @@ impl SlotWriter {
                 header,
                 data_path,
                 pending_outside_run: 0,
-                quiet,
             },
             remaining_seeds,
             completed_runs: 0,
@@ -223,10 +198,10 @@ impl SlotWriter {
     ///
     /// Slots do not overlap, so this is safe to call concurrently from
     /// multiple threads for distinct seeds.
-    pub fn write_slot(&self, seed: u32, eigenvalues: &[f64]) -> Result<(), StorageError> {
+    pub fn write_slot(&self, seed: u32, eigenvalues: &[f64]) -> Result<(), Error> {
         let expected_len = self.header.eigenvalues_per_run as usize;
         if eigenvalues.len() != expected_len {
-            return Err(StorageError::InvalidInput(format!(
+            return Err(Error::InvalidInput(format!(
                 "eigenvalue count mismatch: expected {expected_len}, actual {} (model {}, dim {}, steps {})",
                 eigenvalues.len(),
                 self.header.model,
@@ -235,7 +210,7 @@ impl SlotWriter {
             )));
         }
         if seed == 0 || seed as u64 > self.header.num_runs {
-            return Err(StorageError::InvalidInput(format!(
+            return Err(Error::InvalidInput(format!(
                 "seed {seed} is outside the file capacity 1..={}",
                 self.header.num_runs
             )));
@@ -257,7 +232,7 @@ impl SlotWriter {
     }
 
     /// Flush both files' data to disk.
-    pub fn sync(&self) -> Result<(), StorageError> {
+    pub fn sync(&self) -> Result<(), Error> {
         self.data_file.sync_data()?;
         self.crc_file.sync_data()?;
         Ok(())
@@ -268,18 +243,12 @@ impl SlotWriter {
     /// When every slot in the file is valid, this marks the file complete,
     /// writes the SHA-256 hash file, and removes the CRC sidecar. Otherwise
     /// the file stays in progress and keeps its sidecar for future resumes.
-    pub fn finish(mut self) -> Result<(), StorageError> {
+    pub fn finish(mut self) -> Result<(), Error> {
         self.data_file.sync_data()?;
         self.crc_file.sync_data()?;
 
         if self.pending_outside_run > 0 {
             // 檔案容量大於本次請求範圍，仍有槽位未完成：維持進行中狀態
-            if !self.quiet {
-                println!(
-                    "Note: {} slots beyond the requested range remain incomplete; file stays resumable",
-                    format_number_with_commas(self.pending_outside_run)
-                );
-            }
             return Ok(());
         }
 
@@ -300,26 +269,16 @@ impl SlotWriter {
         )?;
 
         let _ = std::fs::remove_file(crc_path(&self.data_path));
-
-        if !self.quiet {
-            println!(
-                "SUCCESS: simulation data complete, {} records for model {}, dim {}, steps {}",
-                format_number_with_commas(self.header.num_runs as usize),
-                self.header.model,
-                self.header.dim,
-                self.header.steps
-            );
-        }
         Ok(())
     }
 }
 
 /// 嘗試以讀寫模式打開結構有效的 CRC sidecar；遺失或無效時回傳 `None`
-fn try_open_valid_crc(header: &FileHeader, crc_path: &Path) -> Result<Option<File>, StorageError> {
+fn try_open_valid_crc(header: &FileHeader, crc_path: &Path) -> Result<Option<File>, Error> {
     let mut file = match OpenOptions::new().read(true).write(true).open(crc_path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(StorageError::Io(e)),
+        Err(e) => return Err(Error::Io(e)),
     };
     let mut buf = [0u8; CRC_HEADER_SIZE as usize];
     if file.read_exact(&mut buf).is_err() {
@@ -335,30 +294,17 @@ fn try_open_valid_crc(header: &FileHeader, crc_path: &Path) -> Result<Option<Fil
 }
 
 /// 確保 CRC sidecar 存在且結構有效；遺失時以降級模式重建
-fn ensure_crc_file(
-    data_file: &File,
-    header: &FileHeader,
-    data_path: &Path,
-    quiet: bool,
-) -> Result<File, StorageError> {
+/// （非零槽位以現存內容視為有效，既有記錄的 torn-write 偵測能力不可恢復）
+fn ensure_crc_file(data_file: &File, header: &FileHeader, data_path: &Path) -> Result<File, Error> {
     let path = crc_path(data_path);
     if let Some(file) = try_open_valid_crc(header, &path)? {
         return Ok(file);
-    }
-    if !quiet {
-        println!(
-            "WARNING: CRC sidecar missing or invalid; rebuilding from existing data (torn-write detection unavailable for existing records)"
-        );
     }
     rebuild_crc_file(data_file, header, &path)
 }
 
 /// 重建 CRC sidecar：非零槽位以現存內容計算 CRC（視為有效），零槽位保持 0
-fn rebuild_crc_file(
-    data_file: &File,
-    header: &FileHeader,
-    crc_path: &Path,
-) -> Result<File, StorageError> {
+fn rebuild_crc_file(data_file: &File, header: &FileHeader, crc_path: &Path) -> Result<File, Error> {
     let file = OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -397,15 +343,7 @@ fn expand_file(
     header: &mut FileHeader,
     new_num_runs: u64,
     data_path: &Path,
-    quiet: bool,
-) -> Result<File, StorageError> {
-    if !quiet {
-        println!(
-            "Expanding data file capacity from {} to {} runs",
-            format_number_with_commas(header.num_runs as usize),
-            format_number_with_commas(new_num_runs as usize)
-        );
-    }
+) -> Result<File, Error> {
     let old_header = *header;
     header.num_runs = new_num_runs;
     header.status = STATUS_IN_PROGRESS;
@@ -435,7 +373,7 @@ fn expand_file(
 }
 
 /// Stream a file through SHA-256 and return the lowercase hex digest.
-pub fn sha256_file(path: &Path) -> Result<String, StorageError> {
+pub fn sha256_file(path: &Path) -> Result<String, Error> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 1024 * 1024];

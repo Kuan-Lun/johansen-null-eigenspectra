@@ -9,10 +9,10 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use super::config::MIN_READ_BUFFER_SIZE;
-use super::error::StorageError;
 use super::file_format::{
     CRC_HEADER_SIZE, FileHeader, HEADER_SIZE, calculate_read_buffer_size, slot_is_valid,
 };
+use crate::error::Error;
 
 /// An opened data file with its parsed header.
 pub struct DataFile {
@@ -21,7 +21,7 @@ pub struct DataFile {
 }
 
 /// Open a data file read-only and validate its header and size.
-pub fn open_data_file<P: AsRef<Path>>(path: P) -> Result<DataFile, StorageError> {
+pub fn open_data_file<P: AsRef<Path>>(path: P) -> Result<DataFile, Error> {
     let mut file = File::open(&path)?;
     let mut buf = [0u8; HEADER_SIZE as usize];
     file.read_exact(&mut buf)?;
@@ -32,7 +32,7 @@ pub fn open_data_file<P: AsRef<Path>>(path: P) -> Result<DataFile, StorageError>
     let actual = file.metadata()?.len();
     let expected = header.data_file_size();
     if actual < expected {
-        return Err(StorageError::Corrupted(format!(
+        return Err(Error::Corrupted(format!(
             "data file is smaller than its header implies ({actual} < {expected} bytes)"
         )));
     }
@@ -43,14 +43,11 @@ pub fn open_data_file<P: AsRef<Path>>(path: P) -> Result<DataFile, StorageError>
 ///
 /// Returns `Ok(None)` when the sidecar is missing or structurally invalid;
 /// the caller then falls back to degraded validity checks.
-pub fn open_crc_file<P: AsRef<Path>>(
-    path: P,
-    header: &FileHeader,
-) -> Result<Option<File>, StorageError> {
+pub fn open_crc_file<P: AsRef<Path>>(path: P, header: &FileHeader) -> Result<Option<File>, Error> {
     let mut file = match File::open(&path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(StorageError::Io(e)),
+        Err(e) => return Err(Error::Io(e)),
     };
     let mut buf = [0u8; CRC_HEADER_SIZE as usize];
     if file.read_exact(&mut buf).is_err() {
@@ -85,7 +82,7 @@ pub fn scan_slots(
     crc_file: Option<&File>,
     limit: u64,
     mut f: impl FnMut(u32, &[u8], bool),
-) -> Result<(), StorageError> {
+) -> Result<(), Error> {
     let slot_size = header.slot_size() as usize;
     let buffer_size = calculate_read_buffer_size(header.data_file_size());
     let mut data_reader = BufReader::with_capacity(buffer_size, data_file);
@@ -125,7 +122,7 @@ pub fn read_slots(
     data_file: &File,
     header: &FileHeader,
     count: u64,
-) -> Result<Vec<Vec<f64>>, StorageError> {
+) -> Result<Vec<Vec<f64>>, Error> {
     let slot_size = header.slot_size() as usize;
     let buffer_size = calculate_read_buffer_size(header.data_file_size());
     let mut reader = BufReader::with_capacity(buffer_size, data_file);

@@ -1,20 +1,25 @@
-use johansen_null_eigenspectra::{EigenvalueSimulation, JohansenModel};
+use johansen_null_eigenspectra::{EigenvalueSimulation, Error, JohansenModel, Statistic};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create simulation with the same parameters used by the CLI: --dim 5 --steps 1000 --runs 1000
-    let simulation = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 1000, 1000);
+fn main() -> Result<(), Error> {
+    // Create a simulation configuration: model 0, dim 5, 1000 steps, 1000 runs
+    let simulation = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 1000, 1000)?;
 
-    // Run the simulation if data does not already exist
-    simulation.run_simulation();
+    // Run the simulation, resuming from existing data when possible.
+    // The library never prints; progress arrives through the callback.
+    simulation.run_with_progress(|progress| {
+        println!("progress: {}/{}", progress.completed, progress.total);
+    })?;
 
-    // Read data for model 0
-    let records = simulation.read_data()?;
-    println!("Loaded {} eigenvalue records", records.len());
+    // Load every record into memory (seeds 1..=num_runs, in seed order)
+    let data = simulation.load()?;
+    println!("Loaded {} eigenvalue records", data.len());
 
-    // Calculate percentiles of the trace statistic
-    let p = vec![0.5, 0.9, 0.95];
-    let trace = simulation.calculate_trace_percentiles(&p)?;
-    println!("Trace percentiles: {:?}", trace);
+    // Compute percentiles of the trace and max-eigenvalue statistics
+    let p = [0.5, 0.9, 0.95];
+    let trace = data.percentiles(Statistic::Trace, &p);
+    let maxeig = data.percentiles(Statistic::MaxEigenvalue, &p);
+    println!("Trace percentiles: {trace:?}");
+    println!("MaxEig percentiles: {maxeig:?}");
 
     Ok(())
 }

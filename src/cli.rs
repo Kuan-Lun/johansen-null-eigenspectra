@@ -2,7 +2,7 @@
 //!
 //! 提供命令行參數的解析、驗證和幫助信息顯示功能。
 
-use crate::johansen_models::JohansenModel;
+use johansen_null_eigenspectra::JohansenModel;
 use std::io::{self, Write};
 
 // 導入條件性輸出宏
@@ -154,7 +154,7 @@ impl CliArgs {
             match part_trim
                 .parse::<u8>()
                 .ok()
-                .and_then(JohansenModel::from_number)
+                .and_then(|n| JohansenModel::try_from(n).ok())
             {
                 Some(m) => models.push(m),
                 None => return Err(format!("無效的模型代號: {part_trim}")),

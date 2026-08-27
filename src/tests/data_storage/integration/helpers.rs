@@ -11,10 +11,9 @@ use std::io::{Read, Seek, SeekFrom, Write};
 /// `run_simulation()` 走斷點續傳路徑重算這些 seeds。
 pub fn remove_seed_from_file(
     simulation: &EigenvalueSimulation,
-    model: JohansenModel,
     seeds_to_remove: &[u32],
 ) -> std::io::Result<usize> {
-    let path = simulation.get_file_path(model);
+    let path = simulation.data_path();
     if !path.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,

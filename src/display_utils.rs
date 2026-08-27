@@ -168,68 +168,6 @@ pub fn format_remaining_time(elapsed: Duration, completed: usize, total: usize) 
     )
 }
 
-/// 格式化百分比
-///
-/// # 參數
-/// * `completed` - 已完成的數量
-/// * `total` - 總數量
-/// * `decimal_places` - 小數位數（預設為 1）
-///
-/// # 返回值
-/// 格式化的百分比字串
-///
-/// # 範例
-/// ```text
-/// assert_eq!(format_percentage(25, 100, Some(1)), "25.0%");
-/// assert_eq!(format_percentage(1, 3, Some(2)), "33.33%");
-/// assert_eq!(format_percentage(0, 100, None), "0.0%");
-/// ```
-#[allow(dead_code)]
-pub fn format_percentage(completed: usize, total: usize, decimal_places: Option<usize>) -> String {
-    if total == 0 {
-        return "0.0%".to_string();
-    }
-
-    let percentage = (completed as f64 / total as f64) * 100.0;
-    let decimal_places = decimal_places.unwrap_or(1);
-
-    format!("{percentage:.decimal_places$}%")
-}
-
-/// 格式化進度條
-///
-/// # 參數
-/// * `completed` - 已完成的數量
-/// * `total` - 總數量  
-/// * `width` - 進度條寬度（字符數）
-///
-/// # 返回值
-/// 視覺化的進度條字串
-///
-/// # 範例
-/// ```text
-/// let bar = format_progress_bar(25, 100, 20);
-/// // 輸出: "[#####               ] 25.0%"
-/// ```
-#[allow(dead_code)]
-pub fn format_progress_bar(completed: usize, total: usize, width: usize) -> String {
-    if total == 0 {
-        return format!("[{}] 0.0%", " ".repeat(width));
-    }
-
-    let percentage = completed as f64 / total as f64;
-    let filled_width = (percentage * width as f64).round() as usize;
-    let empty_width = width.saturating_sub(filled_width);
-
-    format!(
-        "[{}{}] {}",
-        "#".repeat(filled_width),
-        " ".repeat(empty_width),
-        format_percentage(completed, total, Some(1))
-    )
-}
-
-#[allow(dead_code)]
 /// 顯示百分位數結果的表格
 pub fn display_percentiles_table(
     model_name: &str,
@@ -275,5 +213,53 @@ pub fn display_percentiles_table(
     for (percentile, value) in percentiles.iter().zip(values.iter()) {
         let percentile_str = format!("{:.1}th", percentile * 100.0);
         println!("{percentile_str:<percentile_col_width$} {value:>value_width$.6}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_duration() {
+        assert_eq!(format_duration(Duration::from_secs(30)), "30.00 seconds");
+        assert_eq!(
+            format_duration(Duration::from_secs(90)),
+            "1 minute 30.00 seconds"
+        );
+        assert_eq!(
+            format_duration(Duration::from_secs(3661)),
+            "1 hour 1 minute 1.00 second"
+        );
+        assert_eq!(
+            format_duration(Duration::from_secs(90061)),
+            "1 day 1 hour 1 minute 1.00 second"
+        );
+    }
+
+    #[test]
+    fn test_format_number_with_commas() {
+        assert_eq!(format_number_with_commas(123), "123");
+        assert_eq!(format_number_with_commas(1234), "1,234");
+        assert_eq!(format_number_with_commas(1234567), "1,234,567");
+        assert_eq!(format_number_with_commas(1000000), "1,000,000");
+    }
+
+    #[test]
+    fn test_format_remaining_time() {
+        // 測試正常情況
+        let elapsed = Duration::from_secs(60);
+        let remaining = format_remaining_time(elapsed, 100, 1000);
+        assert!(remaining.contains("estimated remaining"));
+
+        // 測試邊界情況
+        assert_eq!(
+            format_remaining_time(Duration::from_secs(60), 0, 1000),
+            "unknown"
+        );
+        assert_eq!(
+            format_remaining_time(Duration::from_secs(60), 1000, 1000),
+            "unknown"
+        );
     }
 }

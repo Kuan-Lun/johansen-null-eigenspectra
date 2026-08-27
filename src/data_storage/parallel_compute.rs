@@ -2,7 +2,7 @@
 //!
 //! rayon worker 計算完成後直接以定位寫入將結果寫進各自的槽位
 //! （槽位互不重疊，無需鎖），取代舊版的 channel + 寫入執行緒架構。
-//! 以批次為單位同步落盤並回報進度；批次大小依實測耗時
+//! 以批次為單位同步落盤並透過回呼回報進度；批次大小依實測耗時
 //! 向目標批次時間自適應收斂（見 `config` 模組的批次常數）。
 
 use rayon::prelude::*;
@@ -11,53 +11,38 @@ use std::time::Instant;
 use super::config::{
     BATCH_FLOOR_PER_THREAD, BATCH_SMOOTHING, CHECKPOINT_DIVISOR, TARGET_BATCH_SECS,
 };
-use super::error::StorageError;
 use super::simulation::EigenvalueSimulation;
 use super::writer::{OpenResult, SlotWriter};
-use crate::display_utils::{format_number_with_commas, format_remaining_time};
+use crate::error::Error;
 use crate::johansen_statistics::calculate_eigenvalues;
 
-/// 支援斷點續傳的單一模型模擬計算
-pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
-    if !quiet {
-        println!(
-            "Using model: {} (supports resuming from checkpoint)",
-            simulation.model
-        );
-    }
-
-    let mut recreated = false;
-    loop {
-        match try_run(simulation, quiet) {
-            Ok(()) => break,
-            Err(e) if e.is_recreatable() && !recreated => {
-                // 檔案格式或參數不相容：資料可由 seed 重算，刪除後重建一次
-                if !quiet {
-                    println!("WARNING: Existing file is incompatible ({e})");
-                    println!("  The file will be removed and recreated with correct parameters.");
-                }
-                simulation.remove_data_files();
-                recreated = true;
-            }
-            Err(e) => panic!("Simulation failed: {e}"),
-        }
-    }
-
-    if !quiet {
-        println!("===============================\n");
-    }
+/// 模擬進度，於開檔完成後與每批落盤後回報
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Progress {
+    /// 已完成（已寫入並落盤）的模擬次數，含先前執行留下的成果
+    pub completed: u64,
+    /// 目標模擬次數（即配置的 `num_runs`）
+    pub total: u64,
 }
 
-/// 單次嘗試：打開（或建立）檔案並補齊缺少的槽位
-fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), StorageError> {
-    let data_path = simulation.get_file_path(simulation.model);
+/// 支援斷點續傳的單一模型模擬計算。
+///
+/// 既有檔案與配置不相容時回傳錯誤，由呼叫端決定是否刪檔重建；
+/// 本函數不輸出任何內容，進度一律透過 `on_progress` 回報。
+pub fn run_model_simulation(
+    simulation: &EigenvalueSimulation,
+    mut on_progress: impl FnMut(Progress),
+) -> Result<(), Error> {
+    let total = simulation.num_runs() as u64;
+    let data_path = simulation.data_path();
 
     let (writer, remaining_seeds, completed_runs) =
-        match SlotWriter::open(&data_path, simulation.file_header(), quiet)? {
+        match SlotWriter::open(&data_path, simulation.file_header())? {
             OpenResult::AlreadyComplete => {
-                if !quiet {
-                    println!("SUCCESS: calculation for this model already completed, skipping");
-                }
+                on_progress(Progress {
+                    completed: total,
+                    total,
+                });
                 return Ok(());
             }
             OpenResult::InProgress {
@@ -67,19 +52,17 @@ fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), Storage
             } => (writer, remaining_seeds, completed_runs),
         };
 
-    if !quiet {
-        println!(
-            "Remaining {} calculations to complete",
-            format_number_with_commas(remaining_seeds.len())
-        );
-    }
+    // 首次回報：斷點續傳的起始點
+    on_progress(Progress {
+        completed: completed_runs as u64,
+        total,
+    });
 
-    let start_time = Instant::now();
     let total_remaining = remaining_seeds.len();
     let mut processed = 0usize;
 
     // 批次大小界限：上限由任務規模導出，下限由機器規模導出，衝突時上限優先
-    let batch_max = simulation.num_runs.div_ceil(CHECKPOINT_DIVISOR).max(1);
+    let batch_max = simulation.num_runs().div_ceil(CHECKPOINT_DIVISOR).max(1);
     let batch_min = (rayon::current_num_threads() * BATCH_FLOOR_PER_THREAD).min(batch_max);
     let mut batch_size = batch_min;
 
@@ -90,8 +73,12 @@ fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), Storage
 
         // 並行計算並直接寫入各自的槽位
         chunk.par_iter().try_for_each(|&seed| {
-            let eigenvalues =
-                calculate_eigenvalues(simulation.dim, simulation.steps, seed, simulation.model);
+            let eigenvalues = calculate_eigenvalues(
+                simulation.dim(),
+                simulation.steps(),
+                seed,
+                simulation.model(),
+            );
             writer.write_slot(seed, &eigenvalues)
         })?;
 
@@ -105,23 +92,12 @@ fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), Storage
         let next = batch_size as f64 * (1.0 - BATCH_SMOOTHING + BATCH_SMOOTHING * correction);
         batch_size = (next.round() as usize).clamp(batch_min, batch_max);
 
-        if !quiet {
-            let current_total = completed_runs + processed;
-            let progress_ratio = current_total as f64 / simulation.num_runs as f64;
-            println!(
-                "Simulation progress: {}/{} ({:.2}%) - {}",
-                format_number_with_commas(current_total),
-                format_number_with_commas(simulation.num_runs),
-                progress_ratio * 100.0,
-                format_remaining_time(start_time.elapsed(), processed, total_remaining)
-            );
-        }
+        on_progress(Progress {
+            completed: (completed_runs + processed) as u64,
+            total,
+        });
     }
 
     writer.finish()?;
-
-    if !quiet {
-        println!("Saved to {}", data_path.display());
-    }
     Ok(())
 }

@@ -1,7 +1,12 @@
+use crate::error::Error;
+
 /// Johansen 協整檢驗的模型類型
 ///
 /// 這個 enum 定義了 Johansen 協整檢驗中常用的五種模型規格，
 /// 每種模型對應不同的趨勢和截距假設。
+///
+/// 五種模型在數學上是封閉集合，因此**不**標記 `#[non_exhaustive]`：
+/// 呼叫端可以放心窮舉 match。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JohansenModel {
     /// Model 0: 無截距項，無趨勢項
@@ -25,33 +30,30 @@ pub enum JohansenModel {
     InterceptTrendUnrestrictedBoth,
 }
 
-#[allow(dead_code)]
 impl JohansenModel {
-    /// 返回模型的數字標識符（0-4）
-    pub fn to_number(self) -> u8 {
+    /// 全部五種模型，依模型編號 0–4 排序
+    pub const ALL: [JohansenModel; 5] = [
+        JohansenModel::NoInterceptNoTrend,
+        JohansenModel::InterceptNoTrendWithInterceptInCoint,
+        JohansenModel::InterceptNoTrendUnrestrictedIntercept,
+        JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend,
+        JohansenModel::InterceptTrendUnrestrictedBoth,
+    ];
+
+    /// Number of eigenvalues produced per simulation run for a given dimension.
+    ///
+    /// Models 1 and 3 augment the system with an extra deterministic component,
+    /// yielding `dim + 1` eigenvalues; all other models yield `dim`.
+    pub fn eigenvalues_per_run(&self, dim: usize) -> usize {
         match self {
-            JohansenModel::NoInterceptNoTrend => 0,
-            JohansenModel::InterceptNoTrendWithInterceptInCoint => 1,
-            JohansenModel::InterceptNoTrendUnrestrictedIntercept => 2,
-            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => 3,
-            JohansenModel::InterceptTrendUnrestrictedBoth => 4,
+            JohansenModel::InterceptNoTrendWithInterceptInCoint
+            | JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => dim + 1,
+            _ => dim,
         }
     }
 
-    /// 從數字標識符創建模型
-    pub fn from_number(n: u8) -> Option<Self> {
-        match n {
-            0 => Some(JohansenModel::NoInterceptNoTrend),
-            1 => Some(JohansenModel::InterceptNoTrendWithInterceptInCoint),
-            2 => Some(JohansenModel::InterceptNoTrendUnrestrictedIntercept),
-            3 => Some(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend),
-            4 => Some(JohansenModel::InterceptTrendUnrestrictedBoth),
-            _ => None,
-        }
-    }
-
-    /// 返回模型的描述名稱
-    pub fn description(&self) -> &'static str {
+    /// 模型的描述名稱（`Display` 的組成部分）
+    fn description(&self) -> &'static str {
         match self {
             JohansenModel::NoInterceptNoTrend => "No intercept, no trend",
             JohansenModel::InterceptNoTrendWithInterceptInCoint => {
@@ -68,74 +70,36 @@ impl JohansenModel {
             }
         }
     }
+}
 
-    /// 檢查模型是否包含截距項
-    pub fn has_intercept(&self) -> bool {
-        match self {
-            JohansenModel::NoInterceptNoTrend => false,
-            JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptNoTrendUnrestrictedIntercept
-            | JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
-            | JohansenModel::InterceptTrendUnrestrictedBoth => true,
+/// 模型的數字標識符（0–4），與 CLI 的 `--model` 參數及檔案標頭一致
+impl From<JohansenModel> for u8 {
+    fn from(model: JohansenModel) -> u8 {
+        match model {
+            JohansenModel::NoInterceptNoTrend => 0,
+            JohansenModel::InterceptNoTrendWithInterceptInCoint => 1,
+            JohansenModel::InterceptNoTrendUnrestrictedIntercept => 2,
+            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => 3,
+            JohansenModel::InterceptTrendUnrestrictedBoth => 4,
         }
     }
+}
 
-    /// 檢查模型是否包含趨勢項
-    pub fn has_trend(&self) -> bool {
-        match self {
-            JohansenModel::NoInterceptNoTrend
-            | JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptNoTrendUnrestrictedIntercept => false,
-            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend
-            | JohansenModel::InterceptTrendUnrestrictedBoth => true,
+/// 從數字標識符（0–4）建立模型；超出範圍回傳 `Error::InvalidConfig`
+impl TryFrom<u8> for JohansenModel {
+    type Error = Error;
+
+    fn try_from(n: u8) -> Result<Self, Error> {
+        match n {
+            0 => Ok(JohansenModel::NoInterceptNoTrend),
+            1 => Ok(JohansenModel::InterceptNoTrendWithInterceptInCoint),
+            2 => Ok(JohansenModel::InterceptNoTrendUnrestrictedIntercept),
+            3 => Ok(JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend),
+            4 => Ok(JohansenModel::InterceptTrendUnrestrictedBoth),
+            _ => Err(Error::InvalidConfig(format!(
+                "invalid model number {n}; expected 0..=4"
+            ))),
         }
-    }
-
-    /// 檢查截距是否能完全由協整關係解釋
-    /// 返回 true 表示截距完全由協整解釋，false 表示截距無法完全由協整解釋
-    pub fn intercept_fully_explained_by_cointegration(&self) -> bool {
-        match self {
-            JohansenModel::NoInterceptNoTrend => false, // 沒有截距項
-            JohansenModel::InterceptNoTrendWithInterceptInCoint => true, // μ_t = α ρ_0
-            JohansenModel::InterceptNoTrendUnrestrictedIntercept => false, // μ_t = α ρ_0 + α_⊥ γ_0
-            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => false, // μ_t = μ_0 + α ρ_1 t
-            JohansenModel::InterceptTrendUnrestrictedBoth => false, // μ_t = μ_0 + (α ρ_1 + α_⊥ γ_1) t
-        }
-    }
-
-    /// 檢查趨勢是否能完全由協整關係解釋
-    /// 返回 true 表示趨勢完全由協整解釋，false 表示趨勢無法完全由協整解釋
-    pub fn trend_fully_explained_by_cointegration(&self) -> bool {
-        match self {
-            JohansenModel::NoInterceptNoTrend
-            | JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptNoTrendUnrestrictedIntercept => false, // 沒有趨勢項
-            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => true, // μ_t = μ_0 + α ρ_1 t
-            JohansenModel::InterceptTrendUnrestrictedBoth => false, // μ_t = μ_0 + (α ρ_1 + α_⊥ γ_1) t
-        }
-    }
-
-    /// Number of eigenvalues produced per simulation run for a given dimension.
-    ///
-    /// Models 1 and 3 augment the system with an extra deterministic component,
-    /// yielding `dim + 1` eigenvalues; all other models yield `dim`.
-    pub fn eigenvalues_per_run(&self, dim: usize) -> usize {
-        match self {
-            JohansenModel::InterceptNoTrendWithInterceptInCoint
-            | JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend => dim + 1,
-            _ => dim,
-        }
-    }
-
-    /// 返回所有可用的模型
-    pub fn all_models() -> [JohansenModel; 5] {
-        [
-            JohansenModel::NoInterceptNoTrend,
-            JohansenModel::InterceptNoTrendWithInterceptInCoint,
-            JohansenModel::InterceptNoTrendUnrestrictedIntercept,
-            JohansenModel::InterceptTrendUnrestrictedInterceptRestrictedTrend,
-            JohansenModel::InterceptTrendUnrestrictedBoth,
-        ]
     }
 }
 
@@ -148,6 +112,6 @@ impl Default for JohansenModel {
 
 impl std::fmt::Display for JohansenModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Model {}: {}", self.to_number(), self.description())
+        write!(f, "Model {}: {}", u8::from(*self), self.description())
     }
 }
