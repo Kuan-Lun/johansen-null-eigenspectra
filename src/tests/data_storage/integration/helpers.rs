@@ -14,8 +14,7 @@ pub fn remove_seed_from_file(
     model: JohansenModel,
     seeds_to_remove: &[u32],
 ) -> std::io::Result<usize> {
-    let filename = simulation.get_filename(model);
-    let path = std::path::Path::new(&filename);
+    let path = simulation.get_file_path(model);
     if !path.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -26,7 +25,7 @@ pub fn remove_seed_from_file(
     let mut file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(path)?;
+        .open(&path)?;
 
     // 直接解析 V7 header 的必要欄位（同時作為磁碟布局的迴歸驗證）
     let mut header = [0u8; HEADER_SIZE as usize];
@@ -49,8 +48,8 @@ pub fn remove_seed_from_file(
     file.seek(SeekFrom::Start(STATUS_OFFSET))?;
     file.write_all(&[STATUS_IN_PROGRESS])?;
     file.sync_all()?;
-    let _ = std::fs::remove_file(crc_path(path));
-    let _ = std::fs::remove_file(hash_path(path));
+    let _ = std::fs::remove_file(crc_path(&path));
+    let _ = std::fs::remove_file(hash_path(&path));
 
     Ok(removed)
 }

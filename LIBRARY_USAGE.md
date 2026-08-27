@@ -59,9 +59,9 @@ Compute percentiles for the trace statistic or the maximum eigenvalue statistic 
 ### Utility
 
 ```rust
-pub fn get_filename(&self, model: JohansenModel) -> String
+pub fn get_file_path(&self, model: JohansenModel) -> PathBuf
 ```
-Return the file name used to store simulation results for a particular model.
+Return the path used to store simulation results for a particular model, in the form `data/steps{steps}/model{model}/eigenvalues_steps{steps}_model{model}_dim{dim}.dat` relative to the working directory.
 
 ## Example
 

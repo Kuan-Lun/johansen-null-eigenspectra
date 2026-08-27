@@ -14,12 +14,8 @@ fn test_data_integrity() {
     }
 
     // 檢查檔案是否被創建
-    let filename = simulation.get_filename(model);
-    assert!(
-        std::path::Path::new(&filename).exists(),
-        "檔案應該存在: {}",
-        filename
-    );
+    let data_path = simulation.get_file_path(model);
+    assert!(data_path.exists(), "檔案應該存在: {}", data_path.display());
 
     // 多次讀取，確保結果一致
     let data1 = simulation.read_data().expect("第一次讀取應該成功");

@@ -4,7 +4,7 @@
 //! V7 格式下 seed 由槽位位置隱含：`read_data()` 回傳的第 i 筆
 //! 即為 seed = i+1 的結果。
 
-use std::path::Path;
+use std::path::PathBuf;
 
 use super::error::StorageError;
 use super::file_format::{FileHeader, STATUS_COMPLETE, STATUS_IN_PROGRESS, crc_path, hash_path};
@@ -89,8 +89,8 @@ impl EigenvalueSimulation {
     }
 
     fn read_data_impl(&self) -> Result<Vec<Vec<f64>>, StorageError> {
-        let filename = self.get_filename(self.model);
-        let data = open_data_file(&filename)?;
+        let data_path = self.get_file_path(self.model);
+        let data = open_data_file(&data_path)?;
         data.header.check_compatible(&self.file_header())?;
 
         let requested = self.num_runs as u64;
@@ -101,7 +101,7 @@ impl EigenvalueSimulation {
 
         // 進行中（或容量不足）的檔案：逐槽驗證
         let limit = data.header.num_runs.min(requested);
-        let crc_file = open_crc_file(crc_path(Path::new(&filename)), &data.header)?;
+        let crc_file = open_crc_file(crc_path(&data_path), &data.header)?;
         let mut records: Vec<Vec<f64>> = Vec::new();
         let mut found = 0usize;
         scan_slots(
@@ -137,8 +137,8 @@ impl EigenvalueSimulation {
 
     #[allow(dead_code)]
     fn read_all_data_impl(&self) -> Result<Vec<(u32, Vec<f64>)>, StorageError> {
-        let filename = self.get_filename(self.model);
-        let data = open_data_file(&filename)?;
+        let data_path = self.get_file_path(self.model);
+        let data = open_data_file(&data_path)?;
         data.header.check_compatible(&self.file_header())?;
 
         if data.header.status == STATUS_COMPLETE {
@@ -150,7 +150,7 @@ impl EigenvalueSimulation {
                 .collect());
         }
 
-        let crc_file = open_crc_file(crc_path(Path::new(&filename)), &data.header)?;
+        let crc_file = open_crc_file(crc_path(&data_path), &data.header)?;
         let mut records: Vec<(u32, Vec<f64>)> = Vec::new();
         scan_slots(
             &data.file,
@@ -177,9 +177,8 @@ impl EigenvalueSimulation {
 
     #[allow(dead_code)]
     fn verify_file_impl(&self) -> Result<(), StorageError> {
-        let filename = self.get_filename(self.model);
-        let data_path = Path::new(&filename);
-        let hash_file = hash_path(data_path);
+        let data_path = self.get_file_path(self.model);
+        let hash_file = hash_path(&data_path);
 
         let content = std::fs::read_to_string(&hash_file).map_err(|e| {
             StorageError::HashMismatch(format!(
@@ -191,7 +190,7 @@ impl EigenvalueSimulation {
             StorageError::HashMismatch(format!("hash file {} is empty", hash_file.display()))
         })?;
 
-        let actual = sha256_file(data_path)?;
+        let actual = sha256_file(&data_path)?;
         if actual == expected {
             Ok(())
         } else {
@@ -201,47 +200,42 @@ impl EigenvalueSimulation {
         }
     }
 
-    /// Remove the data file and its sidecar files (CRC and hash) for this model.
-    pub fn remove_data_files(&self) {
-        let filename = self.get_filename(self.model);
-        let data_path = Path::new(&filename);
-        let _ = std::fs::remove_file(data_path);
-        let _ = std::fs::remove_file(crc_path(data_path));
-        let _ = std::fs::remove_file(hash_path(data_path));
+    /// Remove the data file and its sidecar files (CRC and hash) for this model,
+    /// then clean up the `model{}/` and `steps{}/` directories if they became empty.
+    pub(crate) fn remove_data_files(&self) {
+        let data_path = self.get_file_path(self.model);
+        let _ = std::fs::remove_file(&data_path);
+        let _ = std::fs::remove_file(crc_path(&data_path));
+        let _ = std::fs::remove_file(hash_path(&data_path));
+
+        // 由內往外移除已空的目錄；remove_dir 對非空目錄會失敗，
+        // 因此不會動到其他 model/steps 的資料
+        if let Some(model_dir) = data_path.parent() {
+            let _ = std::fs::remove_dir(model_dir);
+            if let Some(steps_dir) = model_dir.parent() {
+                let _ = std::fs::remove_dir(steps_dir);
+            }
+        }
     }
 
-    /// 獲取當前模型的檔案名稱
+    /// 獲取當前模型的資料檔案路徑
     ///
-    /// 這是唯一的檔案命名入口點。所有內部檔案操作都通過此方法獲取檔案名稱，
+    /// 這是唯一的檔案命名入口點。所有內部檔案操作都通過此方法獲取檔案路徑，
     /// 確保檔案命名邏輯的一致性。如果需要自定義檔案命名規則，
     /// 可以繼承此 struct 並重寫此方法。
     ///
-    /// 檔案會自動存放在 data/ 資料夾中，如果資料夾不存在會自動創建。
-    /// 如果創建資料夾失敗，程式會 panic，因為沒有資料夾就無法儲存檔案。
-    /// 使用 PathBuf 確保跨平台路徑分隔符的正確性。
-    pub fn get_filename(&self, model: JohansenModel) -> String {
-        use std::path::PathBuf;
-
-        // 確保 data 資料夾存在，失敗時應該 panic 而不是繼續
-        let data_dir = PathBuf::from("data");
-        std::fs::create_dir_all(&data_dir).unwrap_or_else(|e| {
-            panic!(
-                "Failed to create data directory '{}': {}. \
-                 This is required for storing simulation results. \
-                 Please check file system permissions.",
-                data_dir.display(),
-                e
-            );
-        });
-
-        // 使用 PathBuf 構建跨平台的檔案路徑
-        let filename = format!(
-            "eigenvalues_model{}_dim{}_steps{}.dat",
-            model.to_number(),
-            self.dim,
-            self.steps
-        );
-
-        data_dir.join(filename).to_string_lossy().to_string()
+    /// 路徑格式為 `data/steps{steps}/model{model}/eigenvalues_steps{steps}_model{model}_dim{dim}.dat`
+    /// （相對於工作目錄）。此方法為純函數，不會建立目錄；
+    /// 目錄由寫入端在建立檔案前建立。
+    pub fn get_file_path(&self, model: JohansenModel) -> PathBuf {
+        PathBuf::from("data")
+            .join(format!("steps{}", self.steps))
+            .join(format!("model{}", model.to_number()))
+            .join(format!(
+                "eigenvalues_steps{}_model{}_dim{}.dat",
+                self.steps,
+                model.to_number(),
+                self.dim
+            ))
     }
 }

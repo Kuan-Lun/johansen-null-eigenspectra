@@ -34,27 +34,23 @@ fn test_filename_without_num_runs() {
     let simulation1 = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 999, 100);
     let simulation2 = EigenvalueSimulation::new(JohansenModel::NoInterceptNoTrend, 5, 999, 500);
 
-    let filename1 = simulation1.get_filename(JohansenModel::NoInterceptNoTrend);
-    let filename2 = simulation2.get_filename(JohansenModel::NoInterceptNoTrend);
+    let path1 = simulation1.get_file_path(JohansenModel::NoInterceptNoTrend);
+    let path2 = simulation2.get_file_path(JohansenModel::NoInterceptNoTrend);
 
-    // 兩個不同 num_runs 的配置應該產生相同的檔案名稱
-    assert_eq!(filename1, filename2, "不同 num_runs 應該產生相同的檔案名稱");
+    // 兩個不同 num_runs 的配置應該產生相同的檔案路徑
+    assert_eq!(path1, path2, "不同 num_runs 應該產生相同的檔案路徑");
 
-    // 檢查檔案名稱格式
-    assert!(filename1.contains("model0"));
-    assert!(filename1.contains("dim5"));
-    assert!(filename1.contains("steps999"));
-    assert!(filename1.ends_with(".dat"));
+    // 檢查完整的目錄結構與檔案名稱
+    let expected = std::path::Path::new("data")
+        .join("steps999")
+        .join("model0")
+        .join("eigenvalues_steps999_model0_dim5.dat");
+    assert_eq!(path1, expected);
 
     // 確認檔案名稱不包含 num_runs 值（使用不會與其他參數衝突的值）
-    let basename = std::path::Path::new(&filename1)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap();
+    let basename = path1.file_name().unwrap().to_str().unwrap();
     assert!(!basename.contains("_100"), "檔案名稱不應該包含 _100");
     assert!(!basename.contains("_500"), "檔案名稱不應該包含 _500");
-    assert_eq!(basename, "eigenvalues_model0_dim5_steps999.dat");
 }
 
 #[test]
