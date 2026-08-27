@@ -49,7 +49,7 @@ fn test_write_read_roundtrip_out_of_order() {
         writer,
         remaining_seeds,
         completed_runs,
-    } = SlotWriter::open(path_str, header(3, 2), true).unwrap()
+    } = SlotWriter::open(path_str, header(3, 2)).unwrap()
     else {
         panic!("expected InProgress for a new file")
     };
@@ -91,7 +91,7 @@ fn test_resume_detects_missing_and_torn_slots() {
     // 寫入 seeds 1,2,4（缺 3,5），不執行 finish（模擬中斷）
     {
         let OpenResult::InProgress { writer, .. } =
-            SlotWriter::open(path_str, header(5, 1), true).unwrap()
+            SlotWriter::open(path_str, header(5, 1)).unwrap()
         else {
             panic!("expected InProgress")
         };
@@ -122,7 +122,7 @@ fn test_resume_detects_missing_and_torn_slots() {
         writer,
         remaining_seeds,
         completed_runs,
-    } = SlotWriter::open(path_str, header(5, 1), true).unwrap()
+    } = SlotWriter::open(path_str, header(5, 1)).unwrap()
     else {
         panic!("expected InProgress on resume")
     };
@@ -154,7 +154,7 @@ fn test_missing_crc_sidecar_degraded_rebuild() {
     // 全部寫入但不 finish，然後刪除 sidecar（模擬人為介入）
     {
         let OpenResult::InProgress { writer, .. } =
-            SlotWriter::open(path_str, header(3, 1), true).unwrap()
+            SlotWriter::open(path_str, header(3, 1)).unwrap()
         else {
             panic!("expected InProgress")
         };
@@ -166,7 +166,7 @@ fn test_missing_crc_sidecar_degraded_rebuild() {
     std::fs::remove_file(crc_path(&path)).unwrap();
 
     // 重開：降級模式將非零槽位視為有效，且因全部完成而自動收尾
-    match SlotWriter::open(path_str, header(3, 1), true).unwrap() {
+    match SlotWriter::open(path_str, header(3, 1)).unwrap() {
         OpenResult::AlreadyComplete => {}
         _ => panic!("expected AlreadyComplete after degraded rebuild"),
     }
@@ -187,7 +187,7 @@ fn test_expand_capacity_preserves_existing_records() {
     // 建立並完成容量 3 的檔案
     {
         let OpenResult::InProgress { writer, .. } =
-            SlotWriter::open(path_str, header(3, 2), true).unwrap()
+            SlotWriter::open(path_str, header(3, 2)).unwrap()
         else {
             panic!("expected InProgress")
         };
@@ -202,7 +202,7 @@ fn test_expand_capacity_preserves_existing_records() {
         writer,
         remaining_seeds,
         completed_runs,
-    } = SlotWriter::open(path_str, header(5, 2), true).unwrap()
+    } = SlotWriter::open(path_str, header(5, 2)).unwrap()
     else {
         panic!("expected InProgress after expansion")
     };
@@ -233,7 +233,7 @@ fn test_param_mismatch_is_recreatable_error() {
 
     {
         let OpenResult::InProgress { writer, .. } =
-            SlotWriter::open(path_str, header(2, 1), true).unwrap()
+            SlotWriter::open(path_str, header(2, 1)).unwrap()
         else {
             panic!("expected InProgress")
         };
@@ -244,7 +244,7 @@ fn test_param_mismatch_is_recreatable_error() {
     // steps 不同 → 應回報可重建的參數不相容錯誤
     let mut other = header(2, 1);
     other.steps = 999;
-    match SlotWriter::open(path_str, other, true) {
+    match SlotWriter::open(path_str, other) {
         Err(e) => assert!(
             e.is_recreatable(),
             "param mismatch should be a recreatable error, got: {e}"

@@ -1,10 +1,10 @@
 //! V7 檔案格式單元測試：header 編解碼、CRC 與槽位有效性規則
 
 use crate::data_storage::crc32::crc32;
-use crate::data_storage::error::StorageError;
 use crate::data_storage::file_format::{
     FileHeader, HEADER_SIZE, STATUS_COMPLETE, STATUS_IN_PROGRESS, record_crc, slot_is_valid,
 };
+use crate::error::Error;
 
 fn sample_header() -> FileHeader {
     FileHeader {
@@ -44,7 +44,7 @@ fn test_header_decode_rejects_bad_magic() {
     encoded[0] ^= 0xFF;
     assert!(matches!(
         FileHeader::decode(&encoded),
-        Err(StorageError::MagicMismatch)
+        Err(Error::MagicMismatch)
     ));
 }
 
@@ -55,7 +55,7 @@ fn test_header_decode_rejects_invalid_fields() {
     encoded[26] = 0;
     assert!(matches!(
         FileHeader::decode(&encoded),
-        Err(StorageError::Corrupted(_))
+        Err(Error::Corrupted(_))
     ));
 
     // 未知的 status byte
@@ -63,7 +63,7 @@ fn test_header_decode_rejects_invalid_fields() {
     encoded[27] = 9;
     assert!(matches!(
         FileHeader::decode(&encoded),
-        Err(StorageError::Corrupted(_))
+        Err(Error::Corrupted(_))
     ));
 }
 
@@ -121,6 +121,6 @@ fn test_check_compatible() {
     mismatched.steps = 2000;
     assert!(matches!(
         header.check_compatible(&mismatched),
-        Err(StorageError::ParamMismatch { field: "steps", .. })
+        Err(Error::ParamMismatch { field: "steps", .. })
     ));
 }

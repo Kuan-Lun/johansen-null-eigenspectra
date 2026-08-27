@@ -89,7 +89,7 @@ Written at completion. Contains the SHA-256 of the final data file in standard `
 <64 hex digits>  <basename of the data file>
 ```
 
-It can be verified with the library API (`EigenvalueSimulation::verify_file()`) or externally:
+It can be verified with the library API (`EigenvalueSimulation::verify()`) or externally:
 
 ```sh
 shasum -a 256 -c eigenvalues_steps50_model0_dim2.dat.sha256

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use super::config::{MAX_READ_BUFFER_SIZE, MIN_READ_BUFFER_SIZE};
 use super::crc32::Crc32;
-use super::error::StorageError;
+use crate::error::Error;
 
 /// Magic header identifying a V7 data file.
 pub const MAGIC_HEADER: &[u8; 12] = b"EIGENVALS_V7";
@@ -88,9 +88,9 @@ impl FileHeader {
     }
 
     /// Parse and structurally validate a 32-byte on-disk header.
-    pub fn decode(buf: &[u8; HEADER_SIZE as usize]) -> Result<Self, StorageError> {
+    pub fn decode(buf: &[u8; HEADER_SIZE as usize]) -> Result<Self, Error> {
         if &buf[0..12] != MAGIC_HEADER {
-            return Err(StorageError::MagicMismatch);
+            return Err(Error::MagicMismatch);
         }
         let header = Self {
             model: buf[12],
@@ -101,19 +101,19 @@ impl FileHeader {
             status: buf[27],
         };
         if header.eigenvalues_per_run == 0 {
-            return Err(StorageError::Corrupted(
+            return Err(Error::Corrupted(
                 "eigenvalues per record is zero".to_string(),
             ));
         }
         if header.status > STATUS_COMPLETE {
-            return Err(StorageError::Corrupted(format!(
+            return Err(Error::Corrupted(format!(
                 "unknown status byte {}",
                 header.status
             )));
         }
         // seed 為 u32，容量不可超出 u32 範圍
         if header.num_runs > u32::MAX as u64 {
-            return Err(StorageError::Corrupted(format!(
+            return Err(Error::Corrupted(format!(
                 "num_runs {} exceeds the u32 seed range",
                 header.num_runs
             )));
@@ -124,7 +124,7 @@ impl FileHeader {
     /// Check that this header matches the requested configuration.
     /// `num_runs` and `status` are intentionally excluded: capacity is
     /// negotiated separately and status describes progress, not identity.
-    pub fn check_compatible(&self, expected: &FileHeader) -> Result<(), StorageError> {
+    pub fn check_compatible(&self, expected: &FileHeader) -> Result<(), Error> {
         let checks: [(&'static str, u64, u64); 4] = [
             ("model", self.model as u64, expected.model as u64),
             ("dim", self.dim as u64, expected.dim as u64),
@@ -137,7 +137,7 @@ impl FileHeader {
         ];
         for (field, file_value, expected) in checks {
             if file_value != expected {
-                return Err(StorageError::ParamMismatch {
+                return Err(Error::ParamMismatch {
                     field,
                     file_value,
                     expected,
