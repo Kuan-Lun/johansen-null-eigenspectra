@@ -50,10 +50,10 @@ pub fn run_model_simulation(simulation: &EigenvalueSimulation, quiet: bool) {
 
 /// 單次嘗試：打開（或建立）檔案並補齊缺少的槽位
 fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), StorageError> {
-    let filename = simulation.get_filename(simulation.model);
+    let data_path = simulation.get_file_path(simulation.model);
 
     let (writer, remaining_seeds, completed_runs) =
-        match SlotWriter::open(&filename, simulation.file_header(), quiet)? {
+        match SlotWriter::open(&data_path, simulation.file_header(), quiet)? {
             OpenResult::AlreadyComplete => {
                 if !quiet {
                     println!("SUCCESS: calculation for this model already completed, skipping");
@@ -121,7 +121,7 @@ fn try_run(simulation: &EigenvalueSimulation, quiet: bool) -> Result<(), Storage
     writer.finish()?;
 
     if !quiet {
-        println!("Saved to {filename}");
+        println!("Saved to {}", data_path.display());
     }
     Ok(())
 }

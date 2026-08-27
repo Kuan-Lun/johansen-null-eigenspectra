@@ -11,20 +11,21 @@ echo
 
 cd /usr/src/app/data
 
-# 檢查是否有 dat 檔案
-if ! ls *.dat >/dev/null 2>&1; then
+# 檢查是否有 dat 檔案（分層存放於 steps*/model*/ 之下，遞迴搜尋）
+datfiles=$(find . -name '*.dat' | sort)
+if [ -z "$datfiles" ]; then
     echo "錯誤：找不到 .dat 檔案"
     exit 1
 fi
 
 echo "現有 dat 檔案："
-ls -lh *.dat
+find . -name '*.dat' -exec ls -lh {} +
 echo
 
 # 對每個 dat 檔案進行分析
 overall_highest_ratio=0  # 追蹤最高壓縮率(代表原始編碼效率最低的檔案)
 total_files=0
-for datfile in *.dat; do
+for datfile in $datfiles; do
     echo "=========================================="
     echo "分析檔案: $datfile"
     echo "=========================================="

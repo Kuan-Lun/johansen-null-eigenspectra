@@ -92,7 +92,7 @@ Written at completion. Contains the SHA-256 of the final data file in standard `
 It can be verified with the library API (`EigenvalueSimulation::verify_file()`) or externally:
 
 ```sh
-shasum -a 256 -c eigenvalues_model0_dim2_steps50.dat.sha256
+shasum -a 256 -c eigenvalues_steps50_model0_dim2.dat.sha256
 ```
 
 Verification is on demand only; ordinary reads do not pay the whole-file hashing cost.
@@ -133,7 +133,7 @@ A file whose magic, model, dim, steps, or eigenvalue count conflicts with the re
 
 ## Worked Example
 
-`eigenvalues_model0_dim2_steps50.dat` with 200 runs, N = 2:
+`data/steps50/model0/eigenvalues_steps50_model0_dim2.dat` with 200 runs, N = 2:
 
 ```text
 Header:

@@ -30,9 +30,8 @@ fn test_read_all_data() {
             assert_eq!(eigenvalues, &data[i]);
         }
 
-        // 檢查檔案名稱是否正確
-        let expected_filename = sim.get_filename(test_model);
-        assert!(std::path::Path::new(&expected_filename).exists());
+        // 檢查檔案路徑是否正確
+        assert!(sim.get_file_path(test_model).exists());
     }
 
     // 清理測試檔案

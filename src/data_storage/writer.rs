@@ -72,8 +72,12 @@ impl SlotWriter {
     /// seeds within `1..=expected.num_runs` still need to be computed.
     ///
     /// 既有檔案會經過參數驗證、必要時擴容，並掃描全部槽位的有效性。
-    pub fn open(path: &str, expected: FileHeader, quiet: bool) -> Result<OpenResult, StorageError> {
-        let data_path = PathBuf::from(path);
+    pub fn open<P: AsRef<Path>>(
+        path: P,
+        expected: FileHeader,
+        quiet: bool,
+    ) -> Result<OpenResult, StorageError> {
+        let data_path = path.as_ref().to_path_buf();
         if !data_path.exists() {
             return Self::create_new(data_path, expected, quiet);
         }
@@ -171,6 +175,14 @@ impl SlotWriter {
     ) -> Result<OpenResult, StorageError> {
         let mut header = expected;
         header.status = STATUS_IN_PROGRESS;
+
+        // 路徑計算不建立目錄，改由此處在建立檔案前一併建立；
+        // parent 可能是 ""（純檔名），此時無目錄可建
+        if let Some(parent) = data_path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
+        }
 
         let data_file = OpenOptions::new()
             .create(true)
